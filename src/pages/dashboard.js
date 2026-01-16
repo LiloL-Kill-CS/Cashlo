@@ -1,0 +1,403 @@
+import { useEffect, useState } from 'react';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    BarElement,
+    ArcElement,
+    Title,
+    Tooltip,
+    Legend,
+    Filler
+} from 'chart.js';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import Sidebar from '@/components/layout/Sidebar';
+import { useAuth } from '@/hooks/useAuth';
+import { useTransactions } from '@/hooks/useTransactions';
+import { formatCurrency } from '@/lib/db';
+
+// Register Chart.js components
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    BarElement,
+    ArcElement,
+    Title,
+    Tooltip,
+    Legend,
+    Filler
+);
+
+export default function DashboardPage() {
+    const { user, loading: authLoading } = useAuth();
+    const { transactions, loading: txnLoading, getTodayStats, getTopProducts, getTransactionsByDateRange } = useTransactions();
+    const [period, setPeriod] = useState('today');
+    const [stats, setStats] = useState({ revenue: 0, profit: 0, count: 0 });
+    const [topProducts, setTopProducts] = useState([]);
+    const [chartData, setChartData] = useState({ labels: [], revenue: [], profit: [] });
+
+    useEffect(() => {
+        if (!authLoading && !user) {
+            window.location.href = '/';
+        }
+    }, [user, authLoading]);
+
+    useEffect(() => {
+        if (!txnLoading) {
+            calculateStats();
+        }
+    }, [transactions, period, txnLoading]);
+
+    const calculateStats = () => {
+        const now = new Date();
+        let startDate, endDate;
+
+        switch (period) {
+            case 'today':
+                startDate = new Date(now.setHours(0, 0, 0, 0));
+                endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + 1);
+                break;
+            case 'week':
+                startDate = new Date(now);
+                startDate.setDate(startDate.getDate() - 7);
+                endDate = new Date();
+                break;
+            case 'month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                break;
+            case 'year':
+                startDate = new Date(now.getFullYear(), 0, 1);
+                endDate = new Date(now.getFullYear(), 11, 31);
+                break;
+            default:
+                startDate = new Date(now.setHours(0, 0, 0, 0));
+                endDate = new Date();
+        }
+
+        const periodTxns = getTransactionsByDateRange(startDate, endDate);
+
+        setStats({
+            revenue: periodTxns.reduce((sum, t) => sum + t.subtotal, 0),
+            profit: periodTxns.reduce((sum, t) => sum + t.total_profit, 0),
+            count: periodTxns.length
+        });
+
+        setTopProducts(getTopProducts(startDate, endDate, 5));
+
+        // Generate chart data
+        generateChartData(startDate, endDate, period);
+    };
+
+    const generateChartData = (startDate, endDate, period) => {
+        const labels = [];
+        const revenueData = [];
+        const profitData = [];
+
+        if (period === 'today') {
+            // Hourly data for today
+            for (let h = 6; h <= 22; h++) {
+                labels.push(`${h}:00`);
+                const hourStart = new Date(startDate);
+                hourStart.setHours(h, 0, 0, 0);
+                const hourEnd = new Date(startDate);
+                hourEnd.setHours(h + 1, 0, 0, 0);
+
+                const hourTxns = getTransactionsByDateRange(hourStart, hourEnd);
+                revenueData.push(hourTxns.reduce((sum, t) => sum + t.subtotal, 0));
+                profitData.push(hourTxns.reduce((sum, t) => sum + t.total_profit, 0));
+            }
+        } else if (period === 'week') {
+            // Daily data for week
+            const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+            for (let d = 6; d >= 0; d--) {
+                const dayStart = new Date();
+                dayStart.setDate(dayStart.getDate() - d);
+                dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(dayStart);
+                dayEnd.setDate(dayEnd.getDate() + 1);
+
+                labels.push(days[dayStart.getDay()]);
+                const dayTxns = getTransactionsByDateRange(dayStart, dayEnd);
+                revenueData.push(dayTxns.reduce((sum, t) => sum + t.subtotal, 0));
+                profitData.push(dayTxns.reduce((sum, t) => sum + t.total_profit, 0));
+            }
+        } else if (period === 'month') {
+            // Weekly data for month
+            const weeksInMonth = 4;
+            for (let w = 0; w < weeksInMonth; w++) {
+                labels.push(`Minggu ${w + 1}`);
+                const weekStart = new Date(startDate);
+                weekStart.setDate(weekStart.getDate() + (w * 7));
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekEnd.getDate() + 7);
+
+                const weekTxns = getTransactionsByDateRange(weekStart, weekEnd);
+                revenueData.push(weekTxns.reduce((sum, t) => sum + t.subtotal, 0));
+                profitData.push(weekTxns.reduce((sum, t) => sum + t.total_profit, 0));
+            }
+        } else {
+            // Monthly data for year
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+            for (let m = 0; m < 12; m++) {
+                labels.push(months[m]);
+                const monthStart = new Date(startDate.getFullYear(), m, 1);
+                const monthEnd = new Date(startDate.getFullYear(), m + 1, 0);
+
+                const monthTxns = getTransactionsByDateRange(monthStart, monthEnd);
+                revenueData.push(monthTxns.reduce((sum, t) => sum + t.subtotal, 0));
+                profitData.push(monthTxns.reduce((sum, t) => sum + t.total_profit, 0));
+            }
+        }
+
+        setChartData({ labels, revenue: revenueData, profit: profitData });
+    };
+
+    if (authLoading || txnLoading) {
+        return (
+            <div className="app-container">
+                <Sidebar activePage="dashboard" />
+                <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div className="animate-pulse text-muted">Memuat...</div>
+                </main>
+            </div>
+        );
+    }
+
+    const lineChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: { color: '#B3B3B3', font: { family: 'Inter' } }
+            }
+        },
+        scales: {
+            x: {
+                grid: { color: '#2A2A2A' },
+                ticks: { color: '#666666' }
+            },
+            y: {
+                grid: { color: '#2A2A2A' },
+                ticks: {
+                    color: '#666666',
+                    callback: (value) => formatCurrency(value)
+                }
+            }
+        }
+    };
+
+    const lineChartData = {
+        labels: chartData.labels,
+        datasets: [
+            {
+                label: 'Omzet',
+                data: chartData.revenue,
+                borderColor: '#FFFFFF',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                fill: true,
+                tension: 0.4
+            },
+            {
+                label: 'Keuntungan',
+                data: chartData.profit,
+                borderColor: '#22C55E',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                fill: true,
+                tension: 0.4
+            }
+        ]
+    };
+
+    const barChartData = {
+        labels: topProducts.map(p => p.name),
+        datasets: [
+            {
+                label: 'Terjual',
+                data: topProducts.map(p => p.qty),
+                backgroundColor: '#FFFFFF'
+            }
+        ]
+    };
+
+    const barChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            x: {
+                grid: { color: '#2A2A2A' },
+                ticks: { color: '#666666' }
+            },
+            y: {
+                grid: { display: false },
+                ticks: { color: '#B3B3B3' }
+            }
+        }
+    };
+
+    return (
+        <div className="app-container">
+            <Sidebar activePage="dashboard" />
+
+            <main className="main-content">
+                <header className="page-header">
+                    <div>
+                        <h1 className="page-title">Dashboard</h1>
+                        <p className="text-secondary text-sm">Ringkasan performa bisnis</p>
+                    </div>
+
+                    {/* Period Filter */}
+                    <div className="period-filter" style={{ display: 'flex', gap: '8px' }}>
+                        {[
+                            { key: 'today', label: 'Hari Ini' },
+                            { key: 'week', label: '7 Hari' },
+                            { key: 'month', label: 'Bulan Ini' },
+                            { key: 'year', label: 'Tahun Ini' }
+                        ].map(p => (
+                            <button
+                                key={p.key}
+                                className={`btn ${period === p.key ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                                onClick={() => setPeriod(p.key)}
+                            >
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
+                </header>
+
+                <div style={{ padding: 'var(--spacing-lg)' }}>
+                    {/* Stats Cards */}
+                    <div className="stats-grid-4" style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: 'var(--spacing-md)',
+                        marginBottom: 'var(--spacing-lg)'
+                    }}>
+                        <div className="stat-card">
+                            <div className="stat-label">Omzet</div>
+                            <div className="stat-value">{formatCurrency(stats.revenue)}</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-label">Keuntungan</div>
+                            <div className="stat-value" style={{ color: 'var(--color-success)' }}>
+                                {formatCurrency(stats.profit)}
+                            </div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-label">Transaksi</div>
+                            <div className="stat-value">{stats.count}</div>
+                        </div>
+                    </div>
+
+                    {/* Charts Row */}
+                    <div className="charts-grid" style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2fr 1fr',
+                        gap: 'var(--spacing-md)',
+                        marginBottom: 'var(--spacing-lg)'
+                    }}>
+                        {/* Line Chart */}
+                        <div className="card">
+                            <div className="card-header">
+                                <h3 style={{ fontSize: 'var(--font-size-lg)' }}>Trend Penjualan</h3>
+                            </div>
+                            <div className="card-body" style={{ height: '250px' }}>
+                                <Line data={lineChartData} options={lineChartOptions} />
+                            </div>
+                        </div>
+
+                        {/* Top Products */}
+                        <div className="card">
+                            <div className="card-header">
+                                <h3 style={{ fontSize: 'var(--font-size-lg)' }}>Produk Terlaris</h3>
+                            </div>
+                            <div className="card-body" style={{ height: '250px' }}>
+                                {topProducts.length > 0 ? (
+                                    <Bar data={barChartData} options={barChartOptions} />
+                                ) : (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '100%',
+                                        color: 'var(--color-text-muted)'
+                                    }}>
+                                        Belum ada data
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Recent Transactions */}
+                    <div className="card">
+                        <div className="card-header">
+                            <h3 style={{ fontSize: 'var(--font-size-lg)' }}>Transaksi Terbaru</h3>
+                        </div>
+                        <div className="card-body table-container" style={{ padding: 0 }}>
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th className="hide-mobile">ID</th>
+                                        <th>Waktu</th>
+                                        <th className="hide-mobile">Items</th>
+                                        <th style={{ textAlign: 'right' }}>Total</th>
+                                        <th style={{ textAlign: 'right' }}>Profit</th>
+                                        <th className="hide-mobile">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {transactions.slice(0, 5).map(txn => {
+                                        const items = JSON.parse(txn.items || '[]');
+                                        return (
+                                            <tr key={txn.id}>
+                                                <td className="hide-mobile" style={{ fontFamily: 'monospace', fontSize: '12px' }}>{txn.id}</td>
+                                                <td className="text-secondary">
+                                                    {new Date(txn.datetime).toLocaleString('id-ID', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        day: '2-digit',
+                                                        month: 'short'
+                                                    })}
+                                                </td>
+                                                <td className="hide-mobile">{items.length} item</td>
+                                                <td style={{ textAlign: 'right', fontWeight: '600' }}>
+                                                    {formatCurrency(txn.subtotal)}
+                                                </td>
+                                                <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>
+                                                    +{formatCurrency(txn.total_profit)}
+                                                </td>
+                                                <td className="hide-mobile">
+                                                    <span className={`badge ${txn.status === 'completed' ? 'badge-success' : 'badge-error'}`}>
+                                                        {txn.status === 'completed' ? 'Selesai' : 'Void'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {transactions.length === 0 && (
+                                        <tr>
+                                            <td colSpan="6" style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
+                                                Belum ada transaksi
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
+}
