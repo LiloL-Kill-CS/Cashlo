@@ -1,34 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatCurrency } from '@/lib/db';
+import { useLoyalty } from '@/hooks/useLoyalty';
 
 export default function PaymentModal({
     total,
+    customer,
     onConfirm,
     onCancel
 }) {
+    const { rewards } = useLoyalty();
     const [cashReceived, setCashReceived] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('cash');
+    const [selectedReward, setSelectedReward] = useState(null);
+
+    // Calculate totals with discount
+    const discount = selectedReward ? parseInt(selectedReward.reward_value) : 0;
+    const finalTotal = Math.max(0, total - discount);
 
     const cash = parseInt(cashReceived) || 0;
-    const change = cash - total;
-    const canPay = paymentMethod === 'qr' || cash >= total;
+    const change = cash - finalTotal;
+    const canPay = paymentMethod === 'qr' || cash >= finalTotal;
+
+    // Filter applicable rewards
+    const availableRewards = customer ? rewards.filter(r => r.points_cost <= customer.points && r.reward_type === 'discount_amount') : [];
 
     // Quick amount buttons
     const quickAmounts = [
-        total,
-        Math.ceil(total / 10000) * 10000,
-        Math.ceil(total / 50000) * 50000,
+        finalTotal,
+        Math.ceil(finalTotal / 10000) * 10000,
+        Math.ceil(finalTotal / 50000) * 50000,
         100000,
         200000,
         500000
-    ].filter((v, i, a) => a.indexOf(v) === i && v >= total).slice(0, 6);
+    ].filter((v, i, a) => a.indexOf(v) === i && v >= finalTotal).slice(0, 6);
 
     const handleConfirm = () => {
         if (canPay) {
             onConfirm({
                 paymentMethod,
-                cashReceived: paymentMethod === 'cash' ? cash : total,
-                change: paymentMethod === 'cash' ? change : 0
+                cashReceived: paymentMethod === 'cash' ? cash : finalTotal,
+                change: paymentMethod === 'cash' ? change : 0,
+                pointsRedeemed: selectedReward ? selectedReward.points_cost : 0,
+                rewardId: selectedReward ? selectedReward.id : null
             });
         }
     };
@@ -42,6 +55,42 @@ export default function PaymentModal({
                 </div>
 
                 <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
+                    {/* Customer Info & Points */}
+                    {customer && (
+                        <div style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)' }}>
+                            <div className="flex justify-between items-center mb-sm">
+                                <span style={{ fontWeight: '600' }}>👤 {customer.name}</span>
+                                <span className="badge badge-primary">{customer.points} Poin</span>
+                            </div>
+
+                            {/* Reward Selection */}
+                            {availableRewards.length > 0 ? (
+                                <div>
+                                    <label className="text-secondary text-xs block mb-xs">Tukarkan Poin (Diskon):</label>
+                                    <div className="flex gap-sm overflow-x-auto pb-xs">
+                                        <button
+                                            className={`btn btn-sm ${selectedReward === null ? 'btn-primary' : 'btn-outline'}`}
+                                            onClick={() => setSelectedReward(null)}
+                                        >
+                                            Tidak
+                                        </button>
+                                        {availableRewards.map(r => (
+                                            <button
+                                                key={r.id}
+                                                className={`btn btn-sm ${selectedReward?.id === r.id ? 'btn-primary' : 'btn-outline'}`}
+                                                onClick={() => setSelectedReward(selectedReward?.id === r.id ? null : r)}
+                                            >
+                                                {r.name} (-{r.points_cost} pts)
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-xs text-secondary italic mt-xs">Poin belum cukup untuk menukar hadiah.</div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Total Amount */}
                     <div style={{
                         textAlign: 'center',
@@ -51,15 +100,20 @@ export default function PaymentModal({
                         marginBottom: 'var(--spacing-lg)'
                     }}>
                         <div className="text-secondary text-sm" style={{ marginBottom: '8px' }}>
-                            Total Pembayaran
+                            Total Pembayaran {selectedReward && <span className="text-success">(Hemat {formatCurrency(discount)})</span>}
                         </div>
                         <div style={{
                             fontSize: '36px',
                             fontWeight: '800',
                             letterSpacing: '-0.02em'
                         }}>
-                            {formatCurrency(total)}
+                            {formatCurrency(finalTotal)}
                         </div>
+                        {selectedReward && (
+                            <div className="text-sm text-secondary" style={{ textDecoration: 'line-through' }}>
+                                {formatCurrency(total)}
+                            </div>
+                        )}
                     </div>
 
                     {/* Payment Method */}

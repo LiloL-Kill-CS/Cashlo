@@ -13,51 +13,51 @@ export default function Cart({
     heldOrdersCount = 0,
     onRecall,
     isExpanded,
-    onToggle
+    onToggle,
+    selectedCustomer,
+    onSelectCustomer
 }) {
     const [isMobile, setIsMobile] = useState(false);
 
-    // Check if mobile on mount and resize
-    useEffect(() => {
-        const checkMobile = () => {
-            setIsMobile(window.innerWidth <= 768);
-        };
-
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
+    // ... (keep useEffect) ...
 
     return (
         <div className={`cart-section ${isExpanded ? 'expanded' : ''}`}>
             {/* Cart Header */}
             <div className="cart-header" onClick={onToggle}>
-                <div className="flex items-center gap-md">
-                    <h2 className="cart-title">Pesanan</h2>
-                    {itemCount > 0 && (
-                        <span className="cart-count">{itemCount} item</span>
-                    )}
-                    {isMobile && (
-                        <span className="show-mobile-only" style={{
-                            marginLeft: 'auto',
-                            fontSize: '12px',
-                            color: 'var(--color-text-muted)'
-                        }}>
-                            {isExpanded ? '▼ Tutup' : '▲ Buka'}
-                        </span>
+                {/* Customer Selector */}
+                <div style={{ marginTop: '0', marginBottom: '12px' }} onClick={e => e.stopPropagation()}>
+                    {selectedCustomer ? (
+                        <div
+                            className="flex justify-between items-center p-sm bg-primary-light rounded cursor-pointer"
+                            style={{ background: 'var(--color-bg-secondary)', padding: '8px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                            onClick={onSelectCustomer}
+                        >
+                            <div className="flex items-center gap-xs" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <span>👤 {selectedCustomer.name}</span>
+                                <span className="badge badge-primary scale-75">{selectedCustomer.points} pts</span>
+                            </div>
+                            <span className="text-secondary">✕</span>
+                        </div>
+                    ) : (
+                        <button
+                            className="btn btn-outline btn-sm w-full"
+                            style={{ width: '100%', borderStyle: 'dashed' }}
+                            onClick={onSelectCustomer}
+                        >
+                            + Pilih Pelanggan (Member)
+                        </button>
                     )}
                 </div>
-                {heldOrdersCount > 0 && (
-                    <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onRecall();
-                        }}
-                    >
-                        📋 {heldOrdersCount} Ditahan
-                    </button>
-                )}
+
+                <div className="flex items-center gap-md" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h2 className="cart-title" style={{ margin: 0 }}>Pesanan</h2>
+                        {itemCount > 0 && (
+                            <span className="cart-count">{itemCount} item</span>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Cart Items */}
@@ -131,6 +131,6 @@ export default function Cart({
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

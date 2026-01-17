@@ -16,6 +16,7 @@ import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useTransactions';
+import { useInventory } from '@/hooks/useInventory';
 import { formatCurrency } from '@/lib/db';
 
 // Register Chart.js components
@@ -39,6 +40,10 @@ export default function DashboardPage() {
     const [stats, setStats] = useState({ revenue: 0, profit: 0, count: 0 });
     const [topProducts, setTopProducts] = useState([]);
     const [chartData, setChartData] = useState({ labels: [], revenue: [], profit: [] });
+
+    // Inventory for low stock alerts
+    const { stocks } = useInventory();
+    const lowStockItems = stocks.filter(s => s.quantity <= s.min_stock_level);
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -338,6 +343,36 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Low Stock Alert */}
+                    {lowStockItems.length > 0 && (
+                        <div className="card" style={{ border: '1px solid var(--color-error)', marginBottom: 'var(--spacing-lg)' }}>
+                            <div className="card-header" style={{ background: 'var(--color-error-bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h3 style={{ fontSize: 'var(--font-size-lg)', color: 'var(--color-error)' }}>⚠️ Stok Rendah</h3>
+                                <a href="/inventory" className="btn btn-sm btn-outline">Kelola Stok</a>
+                            </div>
+                            <div className="card-body" style={{ padding: 0 }}>
+                                <table className="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Produk</th>
+                                            <th>Stok</th>
+                                            <th>Min</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {lowStockItems.slice(0, 5).map(item => (
+                                            <tr key={item.id}>
+                                                <td style={{ fontWeight: '500' }}>{item.name}</td>
+                                                <td><span className="badge badge-error">{item.quantity}</span></td>
+                                                <td className="text-secondary">{item.min_stock_level}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Recent Transactions */}
                     <div className="card">

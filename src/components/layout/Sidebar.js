@@ -40,6 +40,34 @@ export default function Sidebar({ activePage }) {
                 </a>
 
                 <a
+                    href="/customers"
+                    className={`sidebar-link ${activePage === 'customers' ? 'active' : ''}`}
+                    title="Pelanggan"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                </a>
+
+                <a
+                    href="/loyalty"
+                    className={`sidebar-link ${activePage === 'loyalty' ? 'active' : ''}`}
+                    title="Loyalty"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                        <path d="M4 22h16"></path>
+                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                        <path d="M18 2h-4c-1.1 0-2 .9-2 2v8.5c0 .28-.22.5-.5.5s-.5-.22-.5-.5V4c0-1.1-.9-2-2-2H6c-2.2 0-4 1.8-4 4v5c0 2.2 1.8 4 4 4h12c2.2 0 4-1.8 4-4V6c0-2.2-1.8-4-4-4z"></path>
+                    </svg>
+                </a>
+
+                <a
                     href="/products"
                     className={`sidebar-link ${activePage === 'products' ? 'active' : ''}`}
                     title="Produk"
@@ -48,6 +76,40 @@ export default function Sidebar({ activePage }) {
                         <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
                         <line x1="3" y1="6" x2="21" y2="6"></line>
                         <path d="M16 10a4 4 0 0 1-8 0"></path>
+                    </svg>
+                </a>
+
+                <a
+                    href="/inventory"
+                    className={`sidebar-link ${activePage === 'inventory' ? 'active' : ''}`}
+                    title="Gudang & Stok"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 9v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9"></path>
+                        <path d="M9 22V12h6v10M2 10.6L12 2l10 8.6"></path>
+                    </svg>
+                </a>
+
+                <a
+                    href="/purchasing"
+                    className={`sidebar-link ${activePage === 'purchasing' ? 'active' : ''}`}
+                    title="Purchasing (Supplier)"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                        <path d="M16 10a4 4 0 0 1-8 0"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </a>
+
+                <a
+                    href="/hr"
+                    className={`sidebar-link ${activePage === 'hr' ? 'active' : ''}`}
+                    title="HR & Absensi"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
                     </svg>
                 </a>
 

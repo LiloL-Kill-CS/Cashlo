@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
-import db, { initializeDatabase } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
     const { user, loading: authLoading, logout } = useAuth();
@@ -29,8 +29,8 @@ export default function SettingsPage() {
 
     async function loadUsers() {
         try {
-            await initializeDatabase();
-            const allUsers = await db.users.toArray();
+            const { data: allUsers, error } = await supabase.from('users').select('*');
+            if (error) throw error;
             setUsers(allUsers);
         } catch (error) {
             console.error('Error loading users:', error);
@@ -59,9 +59,10 @@ export default function SettingsPage() {
                 name: formData.name,
                 role: formData.role
             };
-            await db.users.update(editingUser.id, updates);
+            const { error } = await supabase.from('users').update(updates).eq('id', editingUser.id);
+            if (error) console.error('Error updating user:', error);
         } else {
-            await db.users.add({
+            const userData = {
                 id: `user-${Date.now()}`,
                 name: formData.name,
                 username: formData.username,
@@ -69,7 +70,9 @@ export default function SettingsPage() {
                 role: formData.role,
                 is_active: true,
                 created_at: new Date().toISOString()
-            });
+            };
+            const { error } = await supabase.from('users').insert([userData]);
+            if (error) console.error('Error adding user:', error);
         }
 
         await loadUsers();
@@ -77,7 +80,8 @@ export default function SettingsPage() {
     };
 
     const toggleUserActive = async (u) => {
-        await db.users.update(u.id, { is_active: !u.is_active });
+        const { error } = await supabase.from('users').update({ is_active: !u.is_active }).eq('id', u.id);
+        if (error) console.error('Error toggling user:', error);
         await loadUsers();
     };
 
