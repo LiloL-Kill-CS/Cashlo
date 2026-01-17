@@ -6,7 +6,7 @@ import { formatCurrency, formatDate } from '@/lib/db';
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTransactionsByDateRange } = useTransactions();
+    const { transactions, loading: txnLoading, getTransactionsByDateRange } = useTransactions(user?.id, user?.role);
 
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();

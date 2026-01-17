@@ -6,7 +6,7 @@ import { formatCurrency } from '@/lib/db';
 
 export default function ProductsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { products, categories, loading, addProduct, updateProduct, deleteProduct, addCategory, reload } = useProducts();
+    const { products, categories, loading, addProduct, updateProduct, deleteProduct, addCategory, reload } = useProducts(user?.id, user?.role);
 
     const [showModal, setShowModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);

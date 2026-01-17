@@ -10,7 +10,7 @@ export default function InventoryPage() {
         warehouses, stocks, logs, loading: invLoading,
         selectedWarehouseId, setSelectedWarehouseId,
         addWarehouse, updateStock, deleteWarehouse
-    } = useInventory();
+    } = useInventory(user?.id, user?.role);
 
     const [activeTab, setActiveTab] = useState('stock'); // stock, logs, warehouses
     const [searchTerm, setSearchTerm] = useState('');

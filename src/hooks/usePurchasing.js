@@ -1,20 +1,28 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { generateTransactionId } from '@/lib/db'; // We can reuse this or simple uuid
 
-export function usePurchasing() {
+export function usePurchasing(userId, userRole) {
     const [suppliers, setSuppliers] = useState([]);
     const [purchases, setPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadSuppliers();
-        loadPurchases();
-    }, []);
+        if (userId) {
+            loadSuppliers();
+            loadPurchases();
+        }
+    }, [userId]);
 
     async function loadSuppliers() {
         try {
-            const { data, error } = await supabase.from('suppliers').select('*').order('name');
+            let query = supabase.from('suppliers').select('*').order('name');
+
+            // Filter by owner unless admin
+            if (userRole !== 'admin') {
+                query = query.eq('owner_id', userId);
+            }
+
+            const { data, error } = await query;
             if (error) throw error;
             setSuppliers(data);
         } catch (error) {
@@ -24,7 +32,7 @@ export function usePurchasing() {
 
     async function loadPurchases() {
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('purchases')
                 .select(`
                     *,
@@ -33,6 +41,13 @@ export function usePurchasing() {
                     users (name)
                 `)
                 .order('purchase_date', { ascending: false });
+
+            // Filter by owner unless admin
+            if (userRole !== 'admin') {
+                query = query.eq('created_by', userId);
+            }
+
+            const { data, error } = await query;
             if (error) throw error;
             setPurchases(data);
         } catch (error) {
@@ -43,7 +58,10 @@ export function usePurchasing() {
     }
 
     async function addSupplier(data) {
-        const { error } = await supabase.from('suppliers').insert([data]);
+        const { error } = await supabase.from('suppliers').insert([{
+            ...data,
+            owner_id: userId // Set owner to current user
+        }]);
         if (error) throw error;
         await loadSuppliers();
     }
@@ -60,10 +78,7 @@ export function usePurchasing() {
         await loadSuppliers();
     }
 
-    async function createPurchase(purchaseData, items, userId) {
-        // purchaseData: { supplier_id, warehouse_id, notes, total_amount }
-        // items: [{ product_id, quantity, cost_price }]
-
+    async function createPurchase(purchaseData, items) {
         // 1. Create Purchase Record
         const { data: purchase, error: purchaseError } = await supabase
             .from('purchases')
@@ -90,8 +105,7 @@ export function usePurchasing() {
                 subtotal: subtotal
             }]);
 
-            // b. Update Product Cost Price (Optional: Moving Average or Last Price?)
-            // Let's update to Last Price for simplicity
+            // b. Update Product Cost Price
             await supabase.from('products').update({ cost_price: item.cost_price }).eq('id', item.product_id);
 
             // c. Update Stock
@@ -118,7 +132,7 @@ export function usePurchasing() {
                 change_amount: item.quantity,
                 final_stock: newQty,
                 type: 'purchase',
-                reference_id: purchase.id, // ID refers to purchase ID now
+                reference_id: purchase.id,
                 notes: `Pembelian dari Supplier`,
                 created_by: userId
             }]);

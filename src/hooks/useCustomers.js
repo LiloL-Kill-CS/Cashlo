@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export function useCustomers() {
+export function useCustomers(userId, userRole) {
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadCustomers();
-    }, []);
+        if (userId) {
+            loadCustomers();
+        }
+    }, [userId]);
 
     async function loadCustomers() {
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('customers')
                 .select(`
                     *,
@@ -21,6 +23,13 @@ export function useCustomers() {
                     )
                 `)
                 .order('created_at', { ascending: false });
+
+            // Filter by owner unless admin
+            if (userRole !== 'admin') {
+                query = query.eq('owner_id', userId);
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
             setCustomers(data);
@@ -32,22 +41,22 @@ export function useCustomers() {
     }
 
     async function addCustomer(customerData) {
-        // Check if phone exists
-        const { data: existing } = await supabase
-            .from('customers')
-            .select('id')
-            .eq('phone', customerData.phone);
+        // Check if phone exists for this owner
+        let checkQuery = supabase.from('customers').select('id').eq('phone', customerData.phone);
+        if (userRole !== 'admin') {
+            checkQuery = checkQuery.eq('owner_id', userId);
+        }
+        const { data: existing } = await checkQuery;
 
         if (existing && existing.length > 0) {
             throw new Error('Nomor HP sudah terdaftar');
         }
 
-        // Auto-assign tier based on total_spend (0 for new)
-        // For now just insert default
         const { data, error } = await supabase
             .from('customers')
             .insert([{
                 ...customerData,
+                owner_id: userId, // Set owner to current user
                 points: 0,
                 total_spend: 0,
                 created_at: new Date().toISOString()
@@ -85,7 +94,7 @@ export function useCustomers() {
             return;
         }
 
-        const { data, error } = await supabase
+        let searchQuery = supabase
             .from('customers')
             .select(`
                 *,
@@ -96,6 +105,13 @@ export function useCustomers() {
             `)
             .or(`name.ilike.%${query}%,phone.ilike.%${query}%`)
             .limit(10);
+
+        // Filter by owner unless admin
+        if (userRole !== 'admin') {
+            searchQuery = searchQuery.eq('owner_id', userId);
+        }
+
+        const { data, error } = await searchQuery;
 
         if (error) {
             console.error('Error searching customers:', error);

@@ -6,7 +6,7 @@ import { formatDate } from '@/lib/db';
 
 export default function CustomersPage() {
     const { user, loading: authLoading } = useAuth();
-    const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers } = useCustomers();
+    const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers } = useCustomers(user?.id, user?.role);
     const [searchQuery, setSearchQuery] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);

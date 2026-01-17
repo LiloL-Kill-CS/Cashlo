@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export function useInventory() {
+export function useInventory(userId, userRole) {
     const [warehouses, setWarehouses] = useState([]);
     const [stocks, setStocks] = useState([]);
     const [logs, setLogs] = useState([]);
@@ -10,8 +10,10 @@ export function useInventory() {
 
     // Load Warehouses on mount
     useEffect(() => {
-        loadWarehouses();
-    }, []);
+        if (userId) {
+            loadWarehouses();
+        }
+    }, [userId]);
 
     // Load stocks when warehouse changes
     useEffect(() => {
@@ -23,7 +25,14 @@ export function useInventory() {
 
     async function loadWarehouses() {
         try {
-            const { data, error } = await supabase.from('warehouses').select('*').order('created_at');
+            let query = supabase.from('warehouses').select('*').order('created_at');
+
+            // Filter by owner unless admin
+            if (userRole !== 'admin') {
+                query = query.eq('owner_id', userId);
+            }
+
+            const { data, error } = await query;
             if (error) throw error;
             setWarehouses(data);
 
@@ -31,8 +40,6 @@ export function useInventory() {
             if (data.length > 0 && !selectedWarehouseId) {
                 const primary = data.find(w => w.is_primary) || data[0];
                 setSelectedWarehouseId(primary.id);
-            } else if (data.length === 0) {
-                // If no warehouses, maybe auto-create default? Or handle in UI
             }
         } catch (error) {
             console.error('Error loading warehouses:', error);
@@ -44,10 +51,14 @@ export function useInventory() {
     async function loadStocks(warehouseId) {
         setLoading(true);
         try {
-            // First get all products to ensure we show even those with 0 stock records
-            const { data: products } = await supabase.from('products').select('id, name, category, sell_price');
+            // Get products for this user (or all for admin)
+            let prodQuery = supabase.from('products').select('id, name, category, sell_price');
+            if (userRole !== 'admin') {
+                prodQuery = prodQuery.eq('owner_id', userId);
+            }
+            const { data: products } = await prodQuery;
 
-            // Then get stocks for this warehouse
+            // Get stocks for this warehouse
             const { data: stockRecords, error } = await supabase
                 .from('product_stocks')
                 .select('*')
@@ -95,7 +106,10 @@ export function useInventory() {
     }
 
     async function addWarehouse(data) {
-        const { error } = await supabase.from('warehouses').insert([data]);
+        const { error } = await supabase.from('warehouses').insert([{
+            ...data,
+            owner_id: userId // Set owner to current user
+        }]);
         if (error) throw error;
         await loadWarehouses();
     }
@@ -112,14 +126,14 @@ export function useInventory() {
         await loadWarehouses();
     }
 
-    async function updateStock(productId, warehouseId, newQuantity, type, notes, userId) {
+    async function updateStock(productId, warehouseId, newQuantity, type, notes) {
         // 1. Get current stock
         const { data: currentStockData } = await supabase
             .from('product_stocks')
             .select('quantity')
             .eq('product_id', productId)
             .eq('warehouse_id', warehouseId)
-            .maybeSingle(); // Use maybeSingle because record might not exist yet
+            .maybeSingle();
 
         const currentQty = currentStockData ? parseFloat(currentStockData.quantity) : 0;
         const changeAmount = parseFloat(newQuantity) - currentQty;

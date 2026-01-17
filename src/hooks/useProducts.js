@@ -1,36 +1,37 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export function useProducts() {
+export function useProducts(userId, userRole) {
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadData();
-    }, []);
+        if (userId) {
+            loadData();
+        }
+    }, [userId]);
 
     async function loadData() {
         try {
-            const { data: allProds, error: prodError } = await supabase
-                .from('products')
-                .select('*')
-                .eq('is_active', true);
+            // Build query - admin sees all, others see only their own
+            let prodQuery = supabase.from('products').select('*').eq('is_active', true);
+            let catQuery = supabase.from('categories').select('*').order('order', { ascending: true });
 
-            const { data: cats, error: catError } = await supabase
-                .from('categories')
-                .select('*')
-                .order('order', { ascending: true });
+            if (userRole !== 'admin') {
+                prodQuery = prodQuery.eq('owner_id', userId);
+                catQuery = catQuery.eq('owner_id', userId);
+            }
+
+            const { data: allProds, error: prodError } = await prodQuery;
+            const { data: cats, error: catError } = await catQuery;
 
             if (prodError) throw prodError;
             if (catError) throw catError;
 
-            // Parse modifiers
             const prods = allProds.map(p => ({
                 ...p,
-                modifiers: p.modifiers // modifiers is stored as text (JSON string) in DB, keeping it as is or parsing?
-                // The components expect modifiers to be a JSON string that they parse themselves (e.g. JSON.parse(product.modifiers || '[]'))
-                // So we can leave it as string as returned by Supabase text column.
+                modifiers: p.modifiers
             }));
 
             setProducts(prods);
@@ -47,6 +48,7 @@ export function useProducts() {
         const newProduct = {
             ...product,
             id,
+            owner_id: userId, // Set owner to current user
             modifiers: JSON.stringify(product.modifiers || []),
             is_active: true,
             created_at: new Date().toISOString(),
@@ -91,6 +93,7 @@ export function useProducts() {
         const { error } = await supabase.from('categories').insert([{
             id,
             name,
+            owner_id: userId, // Set owner to current user
             order: maxOrder + 1
         }]);
 

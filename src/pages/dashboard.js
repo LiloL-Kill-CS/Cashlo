@@ -35,14 +35,14 @@ ChartJS.register(
 
 export default function DashboardPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTodayStats, getTopProducts, getTransactionsByDateRange } = useTransactions();
+    const { transactions, loading: txnLoading, getTodayStats, getTopProducts, getTransactionsByDateRange } = useTransactions(user?.id, user?.role);
     const [period, setPeriod] = useState('today');
     const [stats, setStats] = useState({ revenue: 0, profit: 0, count: 0 });
     const [topProducts, setTopProducts] = useState([]);
     const [chartData, setChartData] = useState({ labels: [], revenue: [], profit: [] });
 
     // Inventory for low stock alerts
-    const { stocks } = useInventory();
+    const { stocks } = useInventory(user?.id, user?.role);
     const lowStockItems = stocks.filter(s => s.quantity <= s.min_stock_level);
 
     useEffect(() => {
