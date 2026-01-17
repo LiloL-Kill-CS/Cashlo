@@ -142,9 +142,8 @@ export default function POSPage() {
         try {
             const transaction = await createTransaction(
                 items,
-                user?.id || 'guest',
                 paymentMethod,
-                cashReceived,
+                parseFloat(cashReceived),
                 selectedCustomer?.id,
                 pointsRedeemed
             );
