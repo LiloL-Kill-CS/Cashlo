@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useInventory } from '@/hooks/useInventory';
+import { useProducts } from '@/hooks/useProducts';
 import { formatDate } from '@/lib/db';
 
 export default function InventoryPage() {
@@ -11,6 +12,8 @@ export default function InventoryPage() {
         selectedWarehouseId, setSelectedWarehouseId,
         addWarehouse, updateWarehouse, updateStock, deleteStock, deleteWarehouse
     } = useInventory(user?.id, user?.role);
+
+    const { deleteProduct } = useProducts(user?.id, user?.role);
 
     const [activeTab, setActiveTab] = useState('stock'); // stock, logs, warehouses
     const [searchTerm, setSearchTerm] = useState('');
@@ -93,11 +96,15 @@ export default function InventoryPage() {
         }
     };
 
-    // --- Delete Stock ---
-    const handleDeleteStock = async (item) => {
-        if (confirm(`Hapus produk "${item.name}" dari stok gudang ini?`)) {
+    // --- Delete Product Entirely ---
+    const handleDeleteProduct = async (item) => {
+        if (confirm(`Hapus produk "${item.name}" SEPENUHNYA dari database?\n\nProduk akan dihapus dari semua gudang dan tidak bisa dikembalikan.`)) {
             try {
+                // First delete stock records
                 await deleteStock(item.id, selectedWarehouseId);
+                // Then delete product itself
+                await deleteProduct(item.id);
+                alert('Produk berhasil dihapus!');
             } catch (error) {
                 alert('Error: ' + error.message);
             }
@@ -181,7 +188,7 @@ export default function InventoryPage() {
                                                     <button className="btn btn-sm btn-outline" onClick={() => openAdjustmentModal(item)}>
                                                         Sesuaikan
                                                     </button>
-                                                    <button className="btn btn-sm btn-ghost text-error" onClick={() => handleDeleteStock(item)}>
+                                                    <button className="btn btn-sm btn-ghost text-error" onClick={() => handleDeleteProduct(item)}>
                                                         🗑️
                                                     </button>
                                                 </td>
