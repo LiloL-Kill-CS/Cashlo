@@ -61,21 +61,37 @@ export default function ProductsPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const productData = {
-            name: formData.name,
-            category: formData.category,
-            sell_price: parseInt(formData.sell_price),
-            cost_price: parseInt(formData.cost_price),
-            modifiers: formData.modifiers
-        };
+        try {
+            // Clean up modifiers - ensure price is numeric and filter empty ones
+            const cleanModifiers = formData.modifiers
+                .filter(m => m.name.trim() !== '')
+                .map(m => ({
+                    name: m.name.trim(),
+                    price: parseInt(m.price) || 0,
+                    cost: parseInt(m.cost) || 0
+                }));
 
-        if (editingProduct) {
-            await updateProduct(editingProduct.id, productData);
-        } else {
-            await addProduct(productData);
+            const productData = {
+                name: formData.name,
+                category: formData.category,
+                sell_price: parseInt(formData.sell_price) || 0,
+                cost_price: parseInt(formData.cost_price) || 0,
+                modifiers: cleanModifiers
+            };
+
+            if (editingProduct) {
+                await updateProduct(editingProduct.id, productData);
+                alert('Produk berhasil diperbarui!');
+            } else {
+                await addProduct(productData);
+                alert('Produk berhasil ditambahkan!');
+            }
+
+            setShowModal(false);
+        } catch (error) {
+            console.error('Error saving product:', error);
+            alert('Gagal menyimpan produk: ' + error.message);
         }
-
-        setShowModal(false);
     };
 
     const handleDelete = async (product) => {
@@ -87,7 +103,7 @@ export default function ProductsPage() {
     const addModifier = () => {
         setFormData(prev => ({
             ...prev,
-            modifiers: [...prev.modifiers, { name: '', price: 0, cost: 0 }]
+            modifiers: [...prev.modifiers, { name: '', price: '', cost: '' }]
         }));
     };
 
@@ -95,7 +111,10 @@ export default function ProductsPage() {
         setFormData(prev => ({
             ...prev,
             modifiers: prev.modifiers.map((m, i) =>
-                i === index ? { ...m, [field]: field === 'name' ? value : parseInt(value) || 0 } : m
+                i === index ? {
+                    ...m,
+                    [field]: field === 'name' ? value : (value === '' ? '' : parseInt(value) || 0)
+                } : m
             )
         }));
     };
@@ -336,14 +355,14 @@ export default function ProductsPage() {
                                     {formData.modifiers.map((mod, idx) => (
                                         <div key={idx} style={{
                                             display: 'grid',
-                                            gridTemplateColumns: '2fr 1fr 1fr auto',
+                                            gridTemplateColumns: '2fr 1fr auto',
                                             gap: '8px',
                                             marginBottom: '8px'
                                         }}>
                                             <input
                                                 type="text"
                                                 className="input"
-                                                placeholder="Nama"
+                                                placeholder="Nama opsi"
                                                 value={mod.name}
                                                 onChange={e => updateModifier(idx, 'name', e.target.value)}
                                             />
@@ -351,15 +370,8 @@ export default function ProductsPage() {
                                                 type="number"
                                                 className="input"
                                                 placeholder="Harga"
-                                                value={mod.price}
+                                                value={mod.price === 0 ? '' : mod.price}
                                                 onChange={e => updateModifier(idx, 'price', e.target.value)}
-                                            />
-                                            <input
-                                                type="number"
-                                                className="input"
-                                                placeholder="HPP"
-                                                value={mod.cost}
-                                                onChange={e => updateModifier(idx, 'cost', e.target.value)}
                                             />
                                             <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeModifier(idx)}>
                                                 ✕
