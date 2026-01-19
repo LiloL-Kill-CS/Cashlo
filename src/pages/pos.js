@@ -105,13 +105,22 @@ export default function POSPage() {
 
     const handleModifierConfirm = (selectedModifiers) => {
         if (selectedProduct) {
-            const modifierTotal = selectedModifiers.reduce((sum, m) => sum + (m.price_add || 0), 0);
+            // Calculate modifier price and cost additions
+            const modifierPriceTotal = selectedModifiers.reduce((sum, m) => sum + (m.price || 0), 0);
+            const modifierCostTotal = selectedModifiers.reduce((sum, m) => sum + (m.cost || 0), 0);
+
+            // Build modifier names for display
+            const modifierNames = selectedModifiers.map(m => m.name).join(', ');
+            const displayName = modifierNames
+                ? `${selectedProduct.name} (${modifierNames})`
+                : selectedProduct.name;
+
             addItem({
                 id: selectedProduct.id + '-' + Date.now(),
                 product_id: selectedProduct.id,
-                name: selectedProduct.name,
-                sell_price: (selectedProduct.sell_price || 0) + modifierTotal,
-                cost_price: selectedProduct.cost_price || 0,
+                name: displayName,
+                sell_price: (selectedProduct.sell_price || 0) + modifierPriceTotal,
+                cost_price: (selectedProduct.cost_price || 0) + modifierCostTotal,
                 qty: 1,
                 modifiers: selectedModifiers
             });

@@ -10,8 +10,31 @@ export default function PaymentModal({
 }) {
     const { rewards } = useLoyalty();
     const [cashReceived, setCashReceived] = useState('');
+    const [displayCash, setDisplayCash] = useState(''); // Formatted display value
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [selectedReward, setSelectedReward] = useState(null);
+
+    // Format number with thousand separators (Indonesian style: 1.000.000)
+    const formatWithSeparator = (value) => {
+        if (!value) return '';
+        const num = parseInt(value.toString().replace(/\./g, ''), 10);
+        if (isNaN(num)) return '';
+        return num.toLocaleString('id-ID');
+    };
+
+    // Handle cash input with formatting
+    const handleCashInput = (e) => {
+        const rawValue = e.target.value.replace(/\./g, ''); // Remove existing separators
+        const numericValue = rawValue.replace(/\D/g, ''); // Remove non-digits
+        setCashReceived(numericValue);
+        setDisplayCash(formatWithSeparator(numericValue));
+    };
+
+    // Handle quick amount button clicks
+    const handleQuickAmount = (amount) => {
+        setCashReceived(amount.toString());
+        setDisplayCash(formatWithSeparator(amount));
+    };
 
     // Calculate totals with discount
     const discount = selectedReward ? parseInt(selectedReward.reward_value) : 0;
@@ -147,10 +170,11 @@ export default function PaymentModal({
                                     Uang Diterima
                                 </label>
                                 <input
-                                    type="number"
+                                    type="text"
+                                    inputMode="numeric"
                                     className="input input-lg"
-                                    value={cashReceived}
-                                    onChange={e => setCashReceived(e.target.value)}
+                                    value={displayCash}
+                                    onChange={handleCashInput}
                                     placeholder="Masukkan nominal..."
                                     autoFocus
                                     style={{
@@ -172,7 +196,7 @@ export default function PaymentModal({
                                     <button
                                         key={amount}
                                         className="btn btn-secondary"
-                                        onClick={() => setCashReceived(amount.toString())}
+                                        onClick={() => handleQuickAmount(amount)}
                                     >
                                         {formatCurrency(amount)}
                                     </button>
