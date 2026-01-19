@@ -170,6 +170,18 @@ export function useInventory(userId, userRole) {
         await loadLogs(warehouseId);
     }
 
+    async function deleteStock(productId, warehouseId) {
+        // Delete stock record
+        const { error } = await supabase
+            .from('product_stocks')
+            .delete()
+            .eq('product_id', productId)
+            .eq('warehouse_id', warehouseId);
+
+        if (error) throw error;
+        await loadStocks(warehouseId);
+    }
+
     return {
         warehouses,
         stocks,
@@ -183,6 +195,7 @@ export function useInventory(userId, userRole) {
         updateWarehouse,
         deleteWarehouse,
         updateStock,
+        deleteStock,
         reload: loadWarehouses
     };
 }

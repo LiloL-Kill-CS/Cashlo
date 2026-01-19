@@ -9,7 +9,7 @@ export default function InventoryPage() {
     const {
         warehouses, stocks, logs, loading: invLoading,
         selectedWarehouseId, setSelectedWarehouseId,
-        addWarehouse, updateStock, deleteWarehouse
+        addWarehouse, updateWarehouse, updateStock, deleteStock, deleteWarehouse
     } = useInventory(user?.id, user?.role);
 
     const [activeTab, setActiveTab] = useState('stock'); // stock, logs, warehouses
@@ -19,6 +19,7 @@ export default function InventoryPage() {
     const [adjustmentModal, setAdjustmentModal] = useState(false);
     const [warehouseModal, setWarehouseModal] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
+    const [editingWarehouse, setEditingWarehouse] = useState(null);
     const [formData, setFormData] = useState({});
 
     useEffect(() => {
@@ -67,6 +68,39 @@ export default function InventoryPage() {
             setWarehouseModal(false);
         } catch (error) {
             alert(error.message);
+        }
+    };
+
+    // --- Edit Warehouse ---
+    const openEditWarehouse = (warehouse) => {
+        setEditingWarehouse(warehouse);
+        setFormData({ name: warehouse.name, address: warehouse.address || '' });
+        setWarehouseModal(true);
+    };
+
+    const handleWarehouseSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (editingWarehouse) {
+                await updateWarehouse(editingWarehouse.id, formData);
+            } else {
+                await addWarehouse(formData);
+            }
+            setWarehouseModal(false);
+            setEditingWarehouse(null);
+        } catch (error) {
+            alert(error.message);
+        }
+    };
+
+    // --- Delete Stock ---
+    const handleDeleteStock = async (item) => {
+        if (confirm(`Hapus produk "${item.name}" dari stok gudang ini?`)) {
+            try {
+                await deleteStock(item.id, selectedWarehouseId);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
     };
 
@@ -147,6 +181,9 @@ export default function InventoryPage() {
                                                     <button className="btn btn-sm btn-outline" onClick={() => openAdjustmentModal(item)}>
                                                         Sesuaikan
                                                     </button>
+                                                    <button className="btn btn-sm btn-ghost text-error" onClick={() => handleDeleteStock(item)}>
+                                                        🗑️
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -221,6 +258,7 @@ export default function InventoryPage() {
                                                 <td>{w.address || '-'}</td>
                                                 <td>{w.is_primary ? <span className="badge badge-primary">Utama</span> : 'Cabang'}</td>
                                                 <td style={{ textAlign: 'right' }}>
+                                                    <button className="btn btn-sm btn-ghost" onClick={() => openEditWarehouse(w)}>✏️</button>
                                                     {!w.is_primary && (
                                                         <button className="btn btn-sm btn-ghost text-error" onClick={() => { if (confirm('Hapus gudang ini?')) deleteWarehouse(w.id) }}>🗑️</button>
                                                     )}
@@ -291,13 +329,13 @@ export default function InventoryPage() {
 
             {/* WAREHOUSE MODAL */}
             {warehouseModal && (
-                <div className="modal-overlay" onClick={() => setWarehouseModal(false)}>
+                <div className="modal-overlay" onClick={() => { setWarehouseModal(false); setEditingWarehouse(null); }}>
                     <div className="modal" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Tambah Gudang Baru</h3>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setWarehouseModal(false)}>✕</button>
+                            <h3>{editingWarehouse ? 'Edit Gudang' : 'Tambah Gudang Baru'}</h3>
+                            <button className="btn btn-ghost btn-icon" onClick={() => { setWarehouseModal(false); setEditingWarehouse(null); }}>✕</button>
                         </div>
-                        <form onSubmit={handleAddWarehouse}>
+                        <form onSubmit={handleWarehouseSubmit}>
                             <div className="modal-body">
                                 <div className="form-group mb-md">
                                     <label>Nama Gudang</label>
@@ -305,7 +343,7 @@ export default function InventoryPage() {
                                         type="text"
                                         className="input"
                                         required
-                                        value={formData.name}
+                                        value={formData.name || ''}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     />
                                 </div>
@@ -313,7 +351,7 @@ export default function InventoryPage() {
                                     <label>Alamat (Opsional)</label>
                                     <textarea
                                         className="input"
-                                        value={formData.address}
+                                        value={formData.address || ''}
                                         onChange={e => setFormData({ ...formData, address: e.target.value })}
                                     />
                                 </div>
