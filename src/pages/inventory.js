@@ -10,7 +10,7 @@ export default function InventoryPage() {
     const {
         warehouses, stocks, logs, loading: invLoading,
         selectedWarehouseId, setSelectedWarehouseId,
-        addWarehouse, updateWarehouse, updateStock, deleteStock, deleteWarehouse
+        addWarehouse, updateWarehouse, updateStock, deleteStock, deleteWarehouse, loadStocks
     } = useInventory(user?.id, user?.role);
 
     const { deleteProduct } = useProducts(user?.id, user?.role);
@@ -104,6 +104,8 @@ export default function InventoryPage() {
                 await deleteStock(item.id, selectedWarehouseId);
                 // Then delete product itself
                 await deleteProduct(item.id);
+                // Refresh the stocks list to update UI
+                await loadStocks(selectedWarehouseId);
                 alert('Produk berhasil dihapus!');
             } catch (error) {
                 alert('Error: ' + error.message);
