@@ -79,8 +79,14 @@ export function useProducts(userId, userRole) {
     }
 
     async function deleteProduct(id) {
-        const { error } = await supabase.from('products').update({ is_active: false }).eq('id', id);
-        if (error) console.error('Error deleting product:', error);
+        // Delete product stocks first to avoid foreign key issues
+        await supabase.from('product_stocks').delete().eq('product_id', id);
+        // Then delete the product itself
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (error) {
+            console.error('Error deleting product:', error);
+            throw error;
+        }
         await loadData();
     }
 
