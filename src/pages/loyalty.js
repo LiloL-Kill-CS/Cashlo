@@ -86,7 +86,7 @@ export default function LoyaltyPage() {
                     </div>
                 </header>
 
-                <div style={{ padding: 'var(--spacing-xl)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-xl)' }}>
+                <div className="loyalty-grid" style={{ padding: 'var(--spacing-xl)' }}>
 
                     {/* --- TIERS SECTION --- */}
                     <div className="card">

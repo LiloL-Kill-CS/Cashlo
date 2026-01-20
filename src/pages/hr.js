@@ -113,7 +113,7 @@ export default function HRPage() {
 
                     {/* Tabs */}
                     <div className="flex justify-between items-center mb-lg">
-                        <div className="flex gap-sm">
+                        <div className="flex gap-sm tabs-container">
                             <button className={`btn ${activeTab === 'attendance' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('attendance')}>⏱️ Absensi Saya</button>
                             <button className={`btn ${activeTab === 'shifts' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('shifts')}>📅 Jadwal Shift</button>
                             {isAdmin && (
@@ -124,7 +124,7 @@ export default function HRPage() {
 
                     {/* --- TAB: ATTENDANCE --- */}
                     {activeTab === 'attendance' && (
-                        <div className="grid grid-cols-2 gap-lg" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 2fr', gap: '24px', alignItems: 'start' }}>
+                        <div className="hr-grid">
                             {/* Clock In/Out Card */}
                             <div className="card text-center" style={{ padding: '40px 20px' }}>
                                 <div style={{ fontSize: '64px', marginBottom: '16px' }}>

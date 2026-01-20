@@ -1578,7 +1578,6 @@ a:hover {
   }
 }
 
-/* Touch-optimized spacing */
 @media (pointer: coarse) {
   .btn {
     min-height: 44px;
@@ -1592,5 +1591,200 @@ a:hover {
   .cart-item-qty button {
     min-width: 44px;
     min-height: 44px;
+  }
+}
+
+/* ============================================
+   LOYALTY & HR PAGE RESPONSIVE STYLES
+   ============================================ */
+
+/* Loyalty page responsive grid */
+.loyalty-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-xl);
+}
+
+/* HR attendance grid */
+.hr-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) 2fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+
+  /* Loyalty page - stack columns on mobile */
+  .loyalty-grid {
+    grid-template-columns: 1fr !important;
+    gap: var(--spacing-md);
+  }
+
+  /* HR page - stack columns on mobile */
+  .hr-grid {
+    grid-template-columns: 1fr !important;
+    gap: var(--spacing-md);
+  }
+
+  /* Table horizontal scroll on mobile */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 calc(-1 * var(--spacing-md));
+    padding: 0 var(--spacing-md);
+  }
+
+  .table-responsive .table {
+    min-width: 500px;
+  }
+
+  /* Smaller table cells on mobile */
+  .table th,
+  .table td {
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+  }
+
+  /* Tab buttons wrap on mobile */
+  .tabs-container {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .tabs-container .btn {
+    flex: 1;
+    min-width: 100px;
+    font-size: var(--font-size-xs);
+    padding: var(--spacing-sm);
+  }
+}
+
+/* ============================================
+   SWIPEABLE BOTTOM NAVIGATION
+   ============================================ */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    height: 60px;
+    width: 100%;
+    flex-direction: row;
+    padding: 0;
+    border-right: none;
+    border-top: 1px solid var(--color-border);
+    z-index: 100;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE */
+  }
+
+  .sidebar::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari */
+  }
+
+  .sidebar-logo {
+    display: none;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    flex: none;
+    padding: 0 var(--spacing-sm);
+  }
+
+  .sidebar-link {
+    flex: 0 0 auto;
+    width: 50px;
+    height: 50px;
+    scroll-snap-align: center;
+    border-radius: var(--radius-md);
+    margin: 5px 2px;
+  }
+
+  .sidebar-link svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Main content adjusts for bottom nav */
+  .main-content {
+    margin-left: 0;
+    margin-bottom: 60px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Page header smaller on mobile */
+  .page-header {
+    padding: var(--spacing-md);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+
+  .page-title {
+    font-size: var(--font-size-xl);
+  }
+}
+
+/* ============================================
+   MODAL MOBILE IMPROVEMENTS
+   ============================================ */
+@media (max-width: 768px) {
+  .modal {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    max-height: 85vh;
+    margin-bottom: 70px;
+  }
+
+  .modal-body {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .modal-header h3 {
+    font-size: var(--font-size-lg);
+  }
+}
+
+/* ============================================
+   CARD IMPROVEMENTS FOR MOBILE
+   ============================================ */
+@media (max-width: 768px) {
+  .card-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .card-header h3 {
+    font-size: var(--font-size-md);
+  }
+
+  .card-header .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .card-body {
+    padding: var(--spacing-md);
+  }
+
+  /* Flex column on smaller cards */
+  .card-header.flex {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
