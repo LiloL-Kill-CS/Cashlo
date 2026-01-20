@@ -79,17 +79,27 @@ export function useProducts(userId, userRole) {
     }
 
     async function deleteProduct(id) {
-        // Delete inventory logs first (foreign key constraint)
-        await supabase.from('inventory_logs').delete().eq('product_id', id);
-        // Delete product stocks
-        await supabase.from('product_stocks').delete().eq('product_id', id);
-        // Then delete the product itself
-        const { error } = await supabase.from('products').delete().eq('id', id);
-        if (error) {
-            console.error('Error deleting product:', error);
+        try {
+            // Delete all related records first (in order of dependencies)
+            // 1. Delete from transaction_items (sales history)
+            await supabase.from('transaction_items').delete().eq('product_id', id);
+            // 2. Delete from purchase_items (purchase history)
+            await supabase.from('purchase_items').delete().eq('product_id', id);
+            // 3. Delete inventory logs
+            await supabase.from('inventory_logs').delete().eq('product_id', id);
+            // 4. Delete product stocks
+            await supabase.from('product_stocks').delete().eq('product_id', id);
+            // 5. Finally delete the product itself
+            const { error } = await supabase.from('products').delete().eq('id', id);
+            if (error) {
+                console.error('Error deleting product:', error);
+                throw error;
+            }
+            await loadData();
+        } catch (error) {
+            console.error('Error in deleteProduct:', error);
             throw error;
         }
-        await loadData();
     }
 
     async function addCategory(name) {
