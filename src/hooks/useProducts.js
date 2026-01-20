@@ -79,7 +79,9 @@ export function useProducts(userId, userRole) {
     }
 
     async function deleteProduct(id) {
-        // Delete product stocks first to avoid foreign key issues
+        // Delete inventory logs first (foreign key constraint)
+        await supabase.from('inventory_logs').delete().eq('product_id', id);
+        // Delete product stocks
         await supabase.from('product_stocks').delete().eq('product_id', id);
         // Then delete the product itself
         const { error } = await supabase.from('products').delete().eq('id', id);
