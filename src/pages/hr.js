@@ -165,8 +165,8 @@ export default function HRPage() {
                                 <div className="card-header">
                                     <h3>Riwayat Absensi Saya</h3>
                                 </div>
-                                <div className="card-body p-0">
-                                    <table className="table">
+                                <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+                                    <table className="table" style={{ minWidth: '450px' }}>
                                         <thead>
                                             <tr>
                                                 <th>Tanggal</th>
@@ -179,7 +179,7 @@ export default function HRPage() {
                                         <tbody>
                                             {myHistory.map(a => (
                                                 <tr key={a.id}>
-                                                    <td>{formatDate(a.clock_in)}</td>
+                                                    <td style={{ whiteSpace: 'nowrap' }}>{formatDate(a.clock_in)}</td>
                                                     <td>{formatTime(a.clock_in)}</td>
                                                     <td>{formatTime(a.clock_out)}</td>
                                                     <td>{duration(a.clock_in, a.clock_out)}</td>

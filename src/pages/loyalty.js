@@ -94,8 +94,8 @@ export default function LoyaltyPage() {
                             <h3>Level Member (Tiers)</h3>
                             <button className="btn btn-secondary btn-sm" onClick={() => openTierModal()}>+ Tambah Tier</button>
                         </div>
-                        <div className="card-body" style={{ padding: 0 }}>
-                            <table className="table">
+                        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+                            <table className="table" style={{ minWidth: '400px' }}>
                                 <thead>
                                     <tr>
                                         <th>Nama</th>
@@ -110,7 +110,7 @@ export default function LoyaltyPage() {
                                             <td style={{ fontWeight: 'bold' }}>{t.name}</td>
                                             <td>Rp {parseInt(t.min_spend).toLocaleString('id-ID')}</td>
                                             <td>{t.discount_percent}%</td>
-                                            <td style={{ textAlign: 'right' }}>
+                                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                 <button className="btn btn-ghost btn-sm" onClick={() => openTierModal(t)}>✏️</button>
                                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => handleTierDelete(t.id)}>🗑️</button>
                                             </td>
@@ -127,8 +127,8 @@ export default function LoyaltyPage() {
                             <h3>Katalog Hadiah</h3>
                             <button className="btn btn-secondary btn-sm" onClick={() => openRewardModal()}>+ Tambah Hadiah</button>
                         </div>
-                        <div className="card-body" style={{ padding: 0 }}>
-                            <table className="table">
+                        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+                            <table className="table" style={{ minWidth: '450px' }}>
                                 <thead>
                                     <tr>
                                         <th>Nama Hadiah</th>
@@ -145,7 +145,7 @@ export default function LoyaltyPage() {
                                             <td>
                                                 {r.reward_type === 'discount_amount' ? `Rp ${parseInt(r.reward_value).toLocaleString()}` : r.reward_value}
                                             </td>
-                                            <td style={{ textAlign: 'right' }}>
+                                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                 <button className="btn btn-ghost btn-sm" onClick={() => openRewardModal(r)}>✏️</button>
                                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => handleRewardDelete(r.id)}>🗑️</button>
                                             </td>
