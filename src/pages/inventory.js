@@ -13,7 +13,7 @@ export default function InventoryPage() {
         addWarehouse, updateWarehouse, updateStock, deleteStock, deleteWarehouse, loadStocks
     } = useInventory(user?.id, user?.role);
 
-    const { deleteProduct } = useProducts(user?.id, user?.role);
+    const { deleteProduct, reload: reloadProducts } = useProducts(user?.id, user?.role);
 
     const [activeTab, setActiveTab] = useState('stock'); // stock, logs, warehouses
     const [searchTerm, setSearchTerm] = useState('');
@@ -104,6 +104,8 @@ export default function InventoryPage() {
                 await deleteStock(item.id, selectedWarehouseId);
                 // Then delete product itself
                 await deleteProduct(item.id);
+                // Reload products data to update useProducts hook
+                await reloadProducts();
                 // Refresh the stocks list to update UI
                 await loadStocks(selectedWarehouseId);
                 alert('Produk berhasil dihapus!');
