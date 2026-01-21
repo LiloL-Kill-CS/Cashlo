@@ -5,7 +5,7 @@ import { useLoyalty } from '@/hooks/useLoyalty';
 
 export default function LoyaltyPage() {
     const { user, loading: authLoading } = useAuth();
-    const { tiers, rewards, loading: loyaltyLoading, addTier, updateTier, deleteTier, addReward, updateReward, deleteReward } = useLoyalty();
+    const { tiers, rewards, loading: loyaltyLoading, addTier, updateTier, deleteTier, addReward, updateReward, deleteReward } = useLoyalty(user?.id);
 
     // Modal States
     const [tierModal, setTierModal] = useState(false);
