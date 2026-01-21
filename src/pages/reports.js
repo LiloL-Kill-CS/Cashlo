@@ -224,6 +224,24 @@ export default function ReportsPage() {
                                     >
                                         Bulan Ini
                                     </button>
+                                    <select
+                                        className="input input-sm"
+                                        style={{ width: 'auto', minWidth: '100px', cursor: 'pointer' }}
+                                        onChange={(e) => {
+                                            const y = e.target.value;
+                                            if (y) {
+                                                setStartDate(`${y}-01-01`);
+                                                setEndDate(`${y}-12-31`);
+                                            }
+                                        }}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>Pilih Tahun</option>
+                                        {[0, 1, 2, 3, 4].map(offset => {
+                                            const y = new Date().getFullYear() - offset;
+                                            return <option key={y} value={y}>{y}</option>
+                                        })}
+                                    </select>
                                 </div>
                             </div>
                         </div>
