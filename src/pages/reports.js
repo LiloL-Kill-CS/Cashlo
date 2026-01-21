@@ -110,7 +110,17 @@ export default function ReportsPage() {
     const handleExpenseSubmit = async (e) => {
         e.preventDefault();
         try {
-            await addExpense(newExpense);
+            // Parse amount by removing thousand separators (dots) before sending to DB
+            const parsedAmount = parseFloat(parseNumberInput(newExpense.amount));
+            if (isNaN(parsedAmount) || parsedAmount <= 0) {
+                alert('Masukkan jumlah pengeluaran yang valid');
+                return;
+            }
+
+            await addExpense({
+                ...newExpense,
+                amount: parsedAmount
+            });
             alert('Pengeluaran berhasil disimpan');
             setNewExpense({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
             filterTransactions(); // Refresh
