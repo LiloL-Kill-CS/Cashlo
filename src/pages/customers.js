@@ -10,7 +10,7 @@ export default function CustomersPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
-    const [formData, setFormData] = useState({ name: '', phone: '', email: '' });
+    const [formData, setFormData] = useState({ name: '', phone: '', email: '', address: '' });
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -26,13 +26,13 @@ export default function CustomersPage() {
 
     const openAddModal = () => {
         setEditingCustomer(null);
-        setFormData({ name: '', phone: '', email: '' });
+        setFormData({ name: '', phone: '', email: '', address: '' });
         setShowModal(true);
     };
 
     const openEditModal = (c) => {
         setEditingCustomer(c);
-        setFormData({ name: c.name, phone: c.phone, email: c.email || '' });
+        setFormData({ name: c.name, phone: c.phone || '', email: c.email || '', address: c.address || '' });
         setShowModal(true);
     };
 
@@ -96,6 +96,7 @@ export default function CustomersPage() {
                                 <thead>
                                     <tr>
                                         <th>Nama</th>
+                                        <th>Alamat</th>
                                         <th>No. HP</th>
                                         <th>Tier</th>
                                         <th>Poin</th>
@@ -115,7 +116,8 @@ export default function CustomersPage() {
                                         customers.map(c => (
                                             <tr key={c.id}>
                                                 <td style={{ fontWeight: '500' }}>{c.name}</td>
-                                                <td>{c.phone}</td>
+                                                <td className="text-sm">{c.address || '-'}</td>
+                                                <td>{c.phone || '-'}</td>
                                                 <td>
                                                     <span className="badge badge-primary">
                                                         {c.membership_tiers?.name || 'Bronze'}
@@ -166,11 +168,10 @@ export default function CustomersPage() {
                                     />
                                 </div>
                                 <div className="form-group mb-md">
-                                    <label className="text-sm text-secondary mb-xs block">Nomor HP (WA)</label>
+                                    <label className="text-sm text-secondary mb-xs block">Nomor HP (WA) - Opsional</label>
                                     <input
                                         type="tel"
                                         className="input"
-                                        required
                                         value={formData.phone}
                                         onChange={e => setFormData({ ...formData, phone: e.target.value })}
                                     />
@@ -183,6 +184,15 @@ export default function CustomersPage() {
                                         value={formData.email}
                                         onChange={e => setFormData({ ...formData, email: e.target.value })}
                                     />
+                                </div>
+                                <div className="form-group mb-md">
+                                    <label className="text-sm text-secondary mb-xs block">Alamat Lengkap</label>
+                                    <textarea
+                                        className="input"
+                                        rows="2"
+                                        value={formData.address}
+                                        onChange={e => setFormData({ ...formData, address: e.target.value })}
+                                    ></textarea>
                                 </div>
                             </div>
                             <div className="modal-footer">

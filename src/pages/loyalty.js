@@ -82,7 +82,7 @@ export default function LoyaltyPage() {
                 <header className="page-header">
                     <div>
                         <h1 className="page-title">Loyalty & Rewards</h1>
-                        <p className="text-secondary text-sm">Atur level member dan katalog hadiah</p>
+                        <p className="text-secondary text-sm">Atur level member dan hadiah. (1 Produk = 1 Poin)</p>
                     </div>
                 </header>
 

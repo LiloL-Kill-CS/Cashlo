@@ -41,15 +41,17 @@ export function useCustomers(userId, userRole) {
     }
 
     async function addCustomer(customerData) {
-        // Check if phone exists for this owner
-        let checkQuery = supabase.from('customers').select('id').eq('phone', customerData.phone);
-        if (userRole !== 'admin') {
-            checkQuery = checkQuery.eq('owner_id', userId);
-        }
-        const { data: existing } = await checkQuery;
+        // Check if phone exists for this owner (only if phone is provided)
+        if (customerData.phone) {
+            let checkQuery = supabase.from('customers').select('id').eq('phone', customerData.phone);
+            if (userRole !== 'admin') {
+                checkQuery = checkQuery.eq('owner_id', userId);
+            }
+            const { data: existing } = await checkQuery;
 
-        if (existing && existing.length > 0) {
-            throw new Error('Nomor HP sudah terdaftar');
+            if (existing && existing.length > 0) {
+                throw new Error('Nomor HP sudah terdaftar');
+            }
         }
 
         const { data, error } = await supabase

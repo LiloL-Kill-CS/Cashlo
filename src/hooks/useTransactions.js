@@ -68,7 +68,7 @@ export function useTransactions(userId, userRole) {
             cash_received: cashReceived,
             change: cashReceived - (subtotal - pointsRedeemed),
             points_redeemed: pointsRedeemed,
-            points_earned: Math.floor((subtotal - pointsRedeemed) / 10000),
+            points_earned: Math.floor(items.reduce((sum, item) => sum + item.qty, 0)),
             status: 'completed',
             created_at: now
         };
