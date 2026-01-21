@@ -374,7 +374,20 @@ export default function ReportsPage() {
                                             min="1"
                                             required
                                             value={manualData.count}
-                                            onChange={e => setManualData({ ...manualData, count: e.target.value })}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                const newCount = parseInt(val) || 0;
+                                                const updates = { count: val };
+
+                                                if (manualData.productId) {
+                                                    const prod = products.find(p => p.id === manualData.productId);
+                                                    if (prod) {
+                                                        updates.total_sell = prod.sell_price * newCount;
+                                                        updates.total_cost = prod.cost_price * newCount;
+                                                    }
+                                                }
+                                                setManualData({ ...manualData, ...updates });
+                                            }}
                                         />
                                     </div>
                                 </div>
@@ -411,11 +424,12 @@ export default function ReportsPage() {
                                         onChange={e => {
                                             const pid = e.target.value;
                                             const prod = products.find(p => p.id === pid);
+                                            const qty = parseInt(manualData.count) || 1;
                                             setManualData({
                                                 ...manualData,
                                                 productId: pid,
-                                                total_sell: prod ? prod.sell_price : manualData.total_sell,
-                                                total_cost: prod ? prod.cost_price : manualData.total_cost
+                                                total_sell: prod ? (prod.sell_price * qty) : manualData.total_sell,
+                                                total_cost: prod ? (prod.cost_price * qty) : manualData.total_cost
                                             });
                                         }}
                                     >
