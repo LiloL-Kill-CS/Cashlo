@@ -6,7 +6,7 @@ import { formatCurrency, formatDate } from '@/lib/db';
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTransactionsByDateRange } = useTransactions(user?.id, user?.role);
+    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction } = useTransactions(user?.id, user?.role);
 
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
@@ -16,6 +16,8 @@ export default function ReportsPage() {
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [filteredTxns, setFilteredTxns] = useState([]);
     const [stats, setStats] = useState({ revenue: 0, profit: 0, cost: 0, count: 0 });
+    const [showManualModal, setShowManualModal] = useState(false);
+    const [manualData, setManualData] = useState({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '' });
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -42,8 +44,31 @@ export default function ReportsPage() {
             revenue: filtered.reduce((sum, t) => sum + t.subtotal, 0),
             profit: filtered.reduce((sum, t) => sum + t.total_profit, 0),
             cost: filtered.reduce((sum, t) => sum + t.total_cost, 0),
-            count: filtered.length
+            count: filtered.reduce((sum, t) => sum + (t.manual_txn_count || 1), 0)
         });
+    };
+
+    const handleManualSubmit = async (e) => {
+        e.preventDefault();
+        if (!manualData.datetime || !manualData.total_sell || !manualData.total_cost) {
+            alert('Mohon lengkapi data');
+            return;
+        }
+
+        try {
+            await createManualTransaction({
+                ...manualData,
+                total_sell: parseFloat(manualData.total_sell),
+                total_cost: parseFloat(manualData.total_cost),
+                count: parseInt(manualData.count) || 1,
+                datetime: new Date(manualData.datetime).toISOString()
+            });
+            setShowManualModal(false);
+            setManualData({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '' });
+            alert('Data lama berhasil ditambahkan!');
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
     };
 
     const exportCSV = () => {
@@ -112,6 +137,9 @@ export default function ReportsPage() {
 
                     <button className="btn btn-primary" onClick={exportCSV} disabled={filteredTxns.length === 0}>
                         📥 Export CSV
+                    </button>
+                    <button className="btn btn-secondary ml-sm" onClick={() => setShowManualModal(true)}>
+                        ➕ Input Data Lama
                     </button>
                 </header>
 
@@ -184,7 +212,7 @@ export default function ReportsPage() {
                     {/* Summary Stats */}
                     <div className="stats-grid-4" style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
                         gap: 'var(--spacing-md)',
                         marginBottom: 'var(--spacing-lg)'
                     }}>
@@ -276,6 +304,94 @@ export default function ReportsPage() {
                     </div>
                 </div>
             </main>
+            {showManualModal && (
+                <div className="modal-overlay" onClick={() => setShowManualModal(false)}>
+                    <div className="modal" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Input Data Transaksi Lama</h3>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowManualModal(false)}>✕</button>
+                        </div>
+                        <form onSubmit={handleManualSubmit}>
+                            <div className="modal-body">
+                                <div className="alert alert-info mb-md" style={{ fontSize: '13px', background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '10px', borderRadius: '6px' }}>
+                                    ℹ️ Gunakan fitur ini untuk mencatat omzet lama (sebelum pakai aplikasi). Stok barang tidak akan berkurang.
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-md" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                    <div className="form-group mb-md">
+                                        <label className="text-sm text-secondary mb-xs block">Tanggal & Waktu</label>
+                                        <input
+                                            type="datetime-local"
+                                            className="input"
+                                            required
+                                            value={manualData.datetime}
+                                            onChange={e => setManualData({ ...manualData, datetime: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="form-group mb-md">
+                                        <label className="text-sm text-secondary mb-xs block">Jumlah Transaksi (Qty)</label>
+                                        <input
+                                            type="number"
+                                            className="input"
+                                            min="1"
+                                            required
+                                            value={manualData.count}
+                                            onChange={e => setManualData({ ...manualData, count: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="form-group mb-md">
+                                    <label className="text-sm text-secondary mb-xs block">Total Omzet (Rp)</label>
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        required
+                                        placeholder="0"
+                                        value={manualData.total_sell}
+                                        onChange={e => setManualData({ ...manualData, total_sell: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="form-group mb-md">
+                                    <label className="text-sm text-secondary mb-xs block">Total Modal / HPP (Rp)</label>
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        required
+                                        placeholder="0"
+                                        value={manualData.total_cost}
+                                        onChange={e => setManualData({ ...manualData, total_cost: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="form-group mb-md">
+                                    <label className="text-sm text-secondary mb-xs block">Catatan (Opsional)</label>
+                                    <textarea
+                                        className="input"
+                                        placeholder="Contoh: Rekap Januari 2024"
+                                        value={manualData.notes}
+                                        onChange={e => setManualData({ ...manualData, notes: e.target.value })}
+                                    ></textarea>
+                                </div>
+
+                                <div className="bg-tertiary p-md rounded" style={{ background: 'var(--color-bg-tertiary)', padding: '12px', borderRadius: '8px' }}>
+                                    <div className="flex justify-between mb-xs">
+                                        <span className="text-sm">Profit (Auto):</span>
+                                        <span className="font-bold text-success">
+                                            {formatCurrency((parseFloat(manualData.total_sell) || 0) - (parseFloat(manualData.total_cost) || 0))}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowManualModal(false)}>Batal</button>
+                                <button type="submit" className="btn btn-primary">Simpan Data Lama</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

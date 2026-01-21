@@ -90,7 +90,7 @@ export default function DashboardPage() {
         setStats({
             revenue: periodTxns.reduce((sum, t) => sum + t.subtotal, 0),
             profit: periodTxns.reduce((sum, t) => sum + t.total_profit, 0),
-            count: periodTxns.length
+            count: periodTxns.reduce((sum, t) => sum + (t.manual_txn_count || 1), 0)
         });
 
         setTopProducts(getTopProducts(startDate, endDate, 5));

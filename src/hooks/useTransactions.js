@@ -136,6 +136,52 @@ export function useTransactions(userId, userRole) {
         return transaction;
     }
 
+    async function createManualTransaction(data) {
+        const id = generateTransactionId();
+        const { datetime, count, total_sell, total_cost, notes } = data;
+
+        // Dummy item for record
+        const items = [{
+            product_id: 'manual',
+            name: notes || 'Manual Transaction',
+            qty: count || 1,
+            sell_price: total_sell,
+            cost_price: total_cost,
+            total_sell: total_sell,
+            total_cost: total_cost,
+            profit: total_sell - total_cost
+        }];
+
+        const transaction = {
+            id,
+            datetime: datetime || new Date().toISOString(),
+            user_id: userId,
+            customer_id: null,
+            items: JSON.stringify(items),
+            subtotal: total_sell,
+            total_cost: total_cost,
+            total_profit: total_sell - total_cost,
+            payment_method: 'cash',
+            cash_received: total_sell,
+            change: 0,
+            points_redeemed: 0,
+            points_earned: 0,
+            status: 'completed',
+            manual_txn_count: count || 1, // Store the bulk count
+            created_at: new Date().toISOString()
+        };
+
+        const { error } = await supabase.from('transactions').insert([transaction]);
+        if (error) {
+            console.error('Error creating manual transaction:', error);
+            throw error;
+        }
+
+        // NOTE: We SKIP inventory and customer updates for manual historic entries
+        await loadTransactions();
+        return transaction;
+    }
+
     async function voidTransaction(transactionId) {
         const { error } = await supabase.from('transactions').update({ status: 'voided' }).eq('id', transactionId);
         if (error) console.error('Error voiding transaction:', error);
@@ -161,7 +207,7 @@ export function useTransactions(userId, userRole) {
         return {
             revenue: todayTxns.reduce((sum, t) => sum + t.subtotal, 0),
             profit: todayTxns.reduce((sum, t) => sum + t.total_profit, 0),
-            count: todayTxns.length,
+            count: todayTxns.reduce((sum, t) => sum + (t.manual_txn_count || 1), 0),
             transactions: todayTxns
         };
     }
@@ -191,6 +237,7 @@ export function useTransactions(userId, userRole) {
         loading,
         createTransaction,
         voidTransaction,
+        createManualTransaction,
         getTransactionsByDateRange,
         getTodayStats,
         getTopProducts,
