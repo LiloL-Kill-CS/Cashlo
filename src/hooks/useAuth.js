@@ -8,11 +8,7 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check for existing session
-        const savedUser = localStorage.getItem('cashlo_user');
-        if (savedUser) {
-            setUser(JSON.parse(savedUser));
-        }
+        // Always start at login page - no auto-login from localStorage
         setLoading(false);
     }, []);
 
@@ -62,13 +58,46 @@ export function AuthProvider({ children }) {
         return userData;
     };
 
+    const register = async (username, password, name, role = 'kasir') => {
+        // Check if username exists
+        const { data: existing } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username);
+
+        if (existing && existing.length > 0) {
+            throw new Error('Username sudah digunakan');
+        }
+
+        // Create new user
+        const { data, error } = await supabase
+            .from('users')
+            .insert([{
+                id: `user-${Date.now()}`,
+                username,
+                password_hash: password, // In production, hash this
+                name,
+                role,
+                is_active: true,
+                created_at: new Date().toISOString()
+            }])
+            .select();
+
+        if (error) {
+            console.error('Register error:', error);
+            throw new Error('Gagal membuat akun: ' + error.message);
+        }
+
+        return data[0];
+    };
+
     const logout = () => {
         setUser(null);
         localStorage.removeItem('cashlo_user');
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
+        <AuthContext.Provider value={{ user, login, logout, register, loading }}>
             {children}
         </AuthContext.Provider>
     );

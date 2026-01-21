@@ -14,14 +14,9 @@ export function useProducts(userId, userRole) {
 
     async function loadData() {
         try {
-            // Build query - admin sees all, others see only their own
-            let prodQuery = supabase.from('products').select('*').eq('is_active', true);
-            let catQuery = supabase.from('categories').select('*').order('order', { ascending: true });
-
-            if (userRole !== 'admin') {
-                prodQuery = prodQuery.eq('owner_id', userId);
-                catQuery = catQuery.eq('owner_id', userId);
-            }
+            // Always filter by owner - each user sees only their own data
+            const prodQuery = supabase.from('products').select('*').eq('is_active', true).eq('owner_id', userId);
+            const catQuery = supabase.from('categories').select('*').eq('owner_id', userId).order('order', { ascending: true });
 
             const { data: allProds, error: prodError } = await prodQuery;
             const { data: cats, error: catError } = await catQuery;

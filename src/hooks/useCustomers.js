@@ -22,12 +22,8 @@ export function useCustomers(userId, userRole) {
                         discount_percent
                     )
                 `)
+                .eq('owner_id', userId) // Always filter by owner
                 .order('created_at', { ascending: false });
-
-            // Filter by owner unless admin
-            if (userRole !== 'admin') {
-                query = query.eq('owner_id', userId);
-            }
 
             const { data, error } = await query;
 
@@ -43,10 +39,7 @@ export function useCustomers(userId, userRole) {
     async function addCustomer(customerData) {
         // Check if phone exists for this owner (only if phone is provided)
         if (customerData.phone) {
-            let checkQuery = supabase.from('customers').select('id').eq('phone', customerData.phone);
-            if (userRole !== 'admin') {
-                checkQuery = checkQuery.eq('owner_id', userId);
-            }
+            let checkQuery = supabase.from('customers').select('id').eq('phone', customerData.phone).eq('owner_id', userId);
             const { data: existing } = await checkQuery;
 
             if (existing && existing.length > 0) {

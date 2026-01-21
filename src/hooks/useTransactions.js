@@ -17,12 +17,8 @@ export function useTransactions(userId, userRole) {
             let query = supabase
                 .from('transactions')
                 .select('*')
+                .eq('user_id', userId) // Always filter by owner
                 .order('datetime', { ascending: false });
-
-            // Filter by owner unless admin
-            if (userRole !== 'admin') {
-                query = query.eq('user_id', userId);
-            }
 
             const { data: txns, error } = await query;
 

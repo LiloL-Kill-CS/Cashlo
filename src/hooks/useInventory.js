@@ -25,12 +25,7 @@ export function useInventory(userId, userRole) {
 
     async function loadWarehouses() {
         try {
-            let query = supabase.from('warehouses').select('*').order('created_at');
-
-            // Filter by owner unless admin
-            if (userRole !== 'admin') {
-                query = query.eq('owner_id', userId);
-            }
+            let query = supabase.from('warehouses').select('*').eq('owner_id', userId).order('created_at');
 
             const { data, error } = await query;
             if (error) throw error;
@@ -51,11 +46,8 @@ export function useInventory(userId, userRole) {
     async function loadStocks(warehouseId) {
         setLoading(true);
         try {
-            // Get products for this user (or all for admin)
-            let prodQuery = supabase.from('products').select('id, name, category, sell_price');
-            if (userRole !== 'admin') {
-                prodQuery = prodQuery.eq('owner_id', userId);
-            }
+            // Get products for this user only
+            let prodQuery = supabase.from('products').select('id, name, category, sell_price').eq('owner_id', userId);
             const { data: products } = await prodQuery;
 
             // Get stocks for this warehouse

@@ -15,12 +15,7 @@ export function usePurchasing(userId, userRole) {
 
     async function loadSuppliers() {
         try {
-            let query = supabase.from('suppliers').select('*').order('name');
-
-            // Filter by owner unless admin
-            if (userRole !== 'admin') {
-                query = query.eq('owner_id', userId);
-            }
+            let query = supabase.from('suppliers').select('*').eq('owner_id', userId).order('name');
 
             const { data, error } = await query;
             if (error) throw error;
@@ -40,12 +35,8 @@ export function usePurchasing(userId, userRole) {
                     warehouses (name),
                     users (name)
                 `)
+                .eq('created_by', userId) // Always filter by owner
                 .order('purchase_date', { ascending: false });
-
-            // Filter by owner unless admin
-            if (userRole !== 'admin') {
-                query = query.eq('created_by', userId);
-            }
 
             const { data, error } = await query;
             if (error) throw error;
