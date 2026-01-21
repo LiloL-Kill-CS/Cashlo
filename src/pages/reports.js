@@ -3,12 +3,14 @@ import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useProducts } from '@/hooks/useProducts';
+import { useExpenses } from '@/hooks/useExpenses';
 import { formatCurrency, formatDate } from '@/lib/db';
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
     const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction } = useTransactions(user?.id, user?.role);
     const { products } = useProducts(user?.id, user?.role);
+    const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses(user?.id);
 
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
@@ -17,8 +19,11 @@ export default function ReportsPage() {
     });
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [filteredTxns, setFilteredTxns] = useState([]);
-    const [stats, setStats] = useState({ revenue: 0, profit: 0, cost: 0, count: 0 });
+    const [expenses, setExpenses] = useState([]);
+    const [stats, setStats] = useState({ revenue: 0, grossProfit: 0, cost: 0, count: 0, expenses: 0, netProfit: 0 });
     const [showManualModal, setShowManualModal] = useState(false);
+    const [showExpenseModal, setShowExpenseModal] = useState(false);
+    const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
     const [manualData, setManualData] = useState({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '', productId: '' });
 
     useEffect(() => {
@@ -33,20 +38,31 @@ export default function ReportsPage() {
         }
     }, [transactions, startDate, endDate, txnLoading]);
 
-    const filterTransactions = () => {
+    const filterTransactions = async () => {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
         const filtered = getTransactionsByDateRange(start, end);
+        const expenseData = await getExpensesByDateRange(start, end);
+
         setFilteredTxns(filtered);
+        setExpenses(expenseData);
+
+        const revenue = filtered.reduce((sum, t) => sum + t.subtotal, 0);
+        const cost = filtered.reduce((sum, t) => sum + t.total_cost, 0);
+        const grossProfit = filtered.reduce((sum, t) => sum + t.total_profit, 0);
+        const totalExpenses = expenseData.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+        const count = filtered.reduce((sum, t) => sum + (t.manual_txn_count || 1), 0);
 
         setStats({
-            revenue: filtered.reduce((sum, t) => sum + t.subtotal, 0),
-            profit: filtered.reduce((sum, t) => sum + t.total_profit, 0),
-            cost: filtered.reduce((sum, t) => sum + t.total_cost, 0),
-            count: filtered.reduce((sum, t) => sum + (t.manual_txn_count || 1), 0)
+            revenue,
+            grossProfit,
+            cost,
+            count,
+            expenses: totalExpenses,
+            netProfit: grossProfit - totalExpenses
         });
     };
 
@@ -88,6 +104,25 @@ export default function ReportsPage() {
             alert('Data lama berhasil ditambahkan! Pastikan filter tanggal mencakup tanggal data baru.');
         } catch (error) {
             alert('Error: ' + error.message);
+        }
+    };
+
+    const handleExpenseSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            await addExpense(newExpense);
+            alert('Pengeluaran berhasil disimpan');
+            setNewExpense({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
+            filterTransactions(); // Refresh
+        } catch (error) {
+            alert('Gagal: ' + error.message);
+        }
+    };
+
+    const handleDeleteExpense = async (id) => {
+        if (confirm('Hapus pengeluaran ini?')) {
+            await deleteExpense(id);
+            filterTransactions(); // Refresh
         }
     };
 
@@ -160,6 +195,9 @@ export default function ReportsPage() {
                     </button>
                     <button className="btn btn-secondary ml-sm" onClick={() => setShowManualModal(true)}>
                         ➕ Input Data Lama
+                    </button>
+                    <button className="btn btn-warning ml-sm" onClick={() => setShowExpenseModal(true)} style={{ marginLeft: '8px' }}>
+                        💸 Kelola Pengeluaran
                     </button>
                 </header>
 
@@ -254,28 +292,28 @@ export default function ReportsPage() {
                         gap: 'var(--spacing-md)',
                         marginBottom: 'var(--spacing-lg)'
                     }}>
-                        <div className="stat-card">
-                            <div className="stat-label">Total Omzet</div>
-                            <div className="stat-value" style={{ fontSize: 'var(--font-size-2xl)' }}>
-                                {formatCurrency(stats.revenue)}
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Total Omzet</h3>
+                                <p className="text-xl font-bold">{formatCurrency(stats.revenue)}</p>
                             </div>
                         </div>
-                        <div className="stat-card">
-                            <div className="stat-label">Total HPP</div>
-                            <div className="stat-value" style={{ fontSize: 'var(--font-size-2xl)', color: 'var(--color-warning)' }}>
-                                {formatCurrency(stats.cost)}
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Gross Profit</h3>
+                                <p className="text-xl font-bold text-success">{formatCurrency(stats.grossProfit)}</p>
                             </div>
                         </div>
-                        <div className="stat-card">
-                            <div className="stat-label">Total Profit</div>
-                            <div className="stat-value" style={{ fontSize: 'var(--font-size-2xl)', color: 'var(--color-success)' }}>
-                                {formatCurrency(stats.profit)}
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Pengeluaran (Gaji/Sewa)</h3>
+                                <p className="text-xl font-bold text-warning">{formatCurrency(stats.expenses)}</p>
                             </div>
                         </div>
-                        <div className="stat-card">
-                            <div className="stat-label">Jumlah Transaksi</div>
-                            <div className="stat-value" style={{ fontSize: 'var(--font-size-2xl)' }}>
-                                {stats.count}
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Net Profit (Bersih)</h3>
+                                <p className="text-xl font-bold text-primary">{formatCurrency(stats.netProfit)}</p>
                             </div>
                         </div>
                     </div>
@@ -464,6 +502,94 @@ export default function ReportsPage() {
                                 <button type="submit" className="btn btn-primary">Simpan Data Lama</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Expenses Modal */}
+            {showExpenseModal && (
+                <div className="modal-overlay" onClick={() => setShowExpenseModal(false)}>
+                    <div className="modal" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Kelola Pengeluaran Operasional</h3>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowExpenseModal(false)}>✕</button>
+                        </div>
+                        <div className="modal-body" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                            <div className="alert alert-warning mb-md" style={{ fontSize: '13px', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '10px', borderRadius: '6px' }}>
+                                ℹ️ Masukkan Gaji Karyawan, Sewa Tempat, Listrik, dll agar Net Profit akurat.
+                            </div>
+
+                            <form onSubmit={handleExpenseSubmit} className="mb-lg p-md bg-tertiary rounded" style={{ background: 'var(--color-bg-tertiary)' }}>
+                                <h4 className="mb-sm text-sm font-bold">Tambah Pengeluaran Baru</h4>
+                                <div className="grid grid-cols-2 gap-md" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                    <input
+                                        type="date"
+                                        className="input input-sm"
+                                        required
+                                        value={newExpense.date}
+                                        onChange={e => setNewExpense({ ...newExpense, date: e.target.value })}
+                                    />
+                                    <select
+                                        className="input input-sm"
+                                        value={newExpense.category}
+                                        onChange={e => setNewExpense({ ...newExpense, category: e.target.value })}
+                                    >
+                                        <option value="Gaji Karyawan">Gaji Karyawan</option>
+                                        <option value="Sewa Tempat">Sewa Tempat</option>
+                                        <option value="Listrik & Air">Listrik & Air</option>
+                                        <option value="Internet">Internet</option>
+                                        <option value="Lainnya">Lainnya</option>
+                                    </select>
+                                    <input
+                                        type="number"
+                                        className="input input-sm"
+                                        placeholder="Jumlah (Rp)"
+                                        required
+                                        value={newExpense.amount}
+                                        onChange={e => setNewExpense({ ...newExpense, amount: e.target.value })}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="input input-sm"
+                                        placeholder="Catatan..."
+                                        value={newExpense.notes}
+                                        onChange={e => setNewExpense({ ...newExpense, notes: e.target.value })}
+                                    />
+                                </div>
+                                <button type="submit" className="btn btn-primary btn-sm mt-sm w-full">💾 Simpan Pengeluaran</button>
+                            </form>
+
+                            <h4 className="mb-sm text-sm border-b pb-xs">Riwayat Pengeluaran (Periode Ini)</h4>
+                            <table className="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Tanggal</th>
+                                        <th>Kategori</th>
+                                        <th>Catatan</th>
+                                        <th className="text-right">Jumlah</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {expenses.map(exp => (
+                                        <tr key={exp.id}>
+                                            <td>{formatDate(exp.date)}</td>
+                                            <td><span className="badge badge-neutral">{exp.category}</span></td>
+                                            <td className="text-sm text-secondary">{exp.notes}</td>
+                                            <td className="text-right font-bold text-warning">{formatCurrency(exp.amount)}</td>
+                                            <td className="text-right">
+                                                <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDeleteExpense(exp.id)}>Hapus</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {expenses.length === 0 && (
+                                        <tr>
+                                            <td colSpan="5" className="text-center text-muted p-md">Belum ada data pengeluaran</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             )}

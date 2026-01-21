@@ -17,6 +17,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useInventory } from '@/hooks/useInventory';
+import { useExpenses } from '@/hooks/useExpenses';
 import { formatCurrency } from '@/lib/db';
 
 // Register Chart.js components
@@ -35,9 +36,10 @@ ChartJS.register(
 
 export default function DashboardPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTodayStats, getTopProducts, getTransactionsByDateRange } = useTransactions(user?.id, user?.role);
+    const { transactions, loading: txnLoading, getTransactionsByDateRange, getTopProducts, getTodayStats } = useTransactions(user?.id, user?.role);
+    const { getExpensesByDateRange } = useExpenses(user?.id);
     const [period, setPeriod] = useState('today');
-    const [stats, setStats] = useState({ revenue: 0, profit: 0, count: 0 });
+    const [stats, setStats] = useState({ revenue: 0, profit: 0, count: 0, expenses: 0, netProfit: 0 });
     const [topProducts, setTopProducts] = useState([]);
     const [chartData, setChartData] = useState({ labels: [], revenue: [], profit: [] });
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -61,7 +63,7 @@ export default function DashboardPage() {
         }
     }, [transactions, period, selectedYear, txnLoading]);
 
-    const calculateStats = () => {
+    const calculateStats = async () => {
         const now = new Date();
         let startDate, endDate;
 
@@ -90,10 +92,18 @@ export default function DashboardPage() {
         }
 
         const periodTxns = getTransactionsByDateRange(startDate, endDate);
+        const periodExpenses = await getExpensesByDateRange(startDate, endDate);
+
+        const totalRevenue = periodTxns.reduce((sum, t) => sum + t.subtotal, 0);
+        const totalGrossProfit = periodTxns.reduce((sum, t) => sum + t.total_profit, 0);
+        const totalExpenses = periodExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+        const totalNetProfit = totalGrossProfit - totalExpenses;
 
         setStats({
-            revenue: periodTxns.reduce((sum, t) => sum + t.subtotal, 0),
-            profit: periodTxns.reduce((sum, t) => sum + t.total_profit, 0),
+            revenue: totalRevenue,
+            profit: totalGrossProfit, // Kept as gross for chart consistency or update chart too
+            expenses: totalExpenses,
+            netProfit: totalNetProfit,
             count: periodTxns.reduce((sum, t) => sum + (t.manual_txn_count || 1), 0)
         });
 
@@ -298,30 +308,46 @@ export default function DashboardPage() {
                 </header>
 
                 <div style={{ padding: 'var(--spacing-lg)' }}>
-                    {/* Stats Cards */}
-                    <div className="stats-grid-4" style={{
+                    {/* Stats Grid */}
+                    <div className="stats-grid" style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                         gap: 'var(--spacing-md)',
                         marginBottom: 'var(--spacing-lg)'
                     }}>
-                        <div className="stat-card">
-                            <div className="stat-label">Omzet</div>
-                            <div className="stat-value">{formatCurrency(stats.revenue)}</div>
-                        </div>
-                        <div className="stat-card">
-                            <div className="stat-label">Keuntungan</div>
-                            <div className="stat-value" style={{ color: 'var(--color-success)' }}>
-                                {formatCurrency(stats.profit)}
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Total Omzet</h3>
+                                <p className="text-xl font-bold">{formatCurrency(stats.revenue)}</p>
                             </div>
                         </div>
-                        <div className="stat-card">
-                            <div className="stat-label">Transaksi</div>
-                            <div className="stat-value">{stats.count}</div>
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Gross Profit</h3>
+                                <p className="text-xl font-bold text-success">{formatCurrency(stats.profit)}</p>
+                            </div>
                         </div>
-                    </div>
-
-                    {/* Charts Row */}
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Pengeluaran</h3>
+                                <p className="text-xl font-bold text-warning">{formatCurrency(stats.expenses)}</p>
+                            </div>
+                        </div>
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Net Worth (Bersih)</h3>
+                                <p className="text-xl font-bold" style={{ color: stats.netProfit >= 0 ? 'var(--color-primary)' : 'var(--color-error)' }}>
+                                    {formatCurrency(stats.netProfit)}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="card stat-card">
+                            <div className="card-body">
+                                <h3 className="text-secondary text-sm">Transaksi</h3>
+                                <p className="text-xl font-bold">{stats.count}</p>
+                            </div>
+                        </div>
+                    </div>{/* Charts Row */}
                     <div className="charts-grid" style={{
                         display: 'grid',
                         gridTemplateColumns: '2fr 1fr',
