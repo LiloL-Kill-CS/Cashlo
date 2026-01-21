@@ -8,7 +8,11 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Always start at login page - no auto-login from localStorage
+        // Restore session from localStorage (needed for page reloads after login)
+        const savedUser = localStorage.getItem('cashlo_user');
+        if (savedUser) {
+            setUser(JSON.parse(savedUser));
+        }
         setLoading(false);
     }, []);
 
