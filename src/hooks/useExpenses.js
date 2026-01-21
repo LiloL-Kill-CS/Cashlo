@@ -9,12 +9,16 @@ export function useExpenses(userId) {
         if (!userId) return [];
 
         try {
+            // Format as YYYY-MM-DD for DATE column comparison
+            const startStr = startDate.toISOString().split('T')[0];
+            const endStr = endDate.toISOString().split('T')[0];
+
             const { data, error } = await supabase
                 .from('expenses')
                 .select('*')
                 .eq('owner_id', userId)
-                .gte('date', startDate.toISOString())
-                .lte('date', endDate.toISOString())
+                .gte('date', startStr)
+                .lte('date', endStr)
                 .order('date', { ascending: false });
 
             if (error) throw error;
