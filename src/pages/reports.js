@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useTransactions';
+import { useProducts } from '@/hooks/useProducts';
 import { formatCurrency, formatDate } from '@/lib/db';
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
     const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction } = useTransactions(user?.id, user?.role);
+    const { products } = useProducts(user?.id, user?.role);
 
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
@@ -17,7 +19,7 @@ export default function ReportsPage() {
     const [filteredTxns, setFilteredTxns] = useState([]);
     const [stats, setStats] = useState({ revenue: 0, profit: 0, cost: 0, count: 0 });
     const [showManualModal, setShowManualModal] = useState(false);
-    const [manualData, setManualData] = useState({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '' });
+    const [manualData, setManualData] = useState({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '', productId: '' });
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -56,16 +58,34 @@ export default function ReportsPage() {
         }
 
         try {
+            let items = null;
+            if (manualData.productId) {
+                const prod = products.find(p => p.id === manualData.productId);
+                if (prod) {
+                    items = [{
+                        product_id: prod.id,
+                        name: prod.name,
+                        qty: parseInt(manualData.count) || 1,
+                        sell_price: parseFloat(manualData.total_sell),
+                        cost_price: parseFloat(manualData.total_cost),
+                        total_sell: parseFloat(manualData.total_sell),
+                        total_cost: parseFloat(manualData.total_cost),
+                        profit: parseFloat(manualData.total_sell) - parseFloat(manualData.total_cost)
+                    }];
+                }
+            }
+
             await createManualTransaction({
                 ...manualData,
                 total_sell: parseFloat(manualData.total_sell),
                 total_cost: parseFloat(manualData.total_cost),
                 count: parseInt(manualData.count) || 1,
+                items,
                 datetime: new Date(manualData.datetime).toISOString()
             });
             setShowManualModal(false);
-            setManualData({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '' });
-            alert('Data lama berhasil ditambahkan!');
+            setManualData({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '', productId: '' });
+            alert('Data lama berhasil ditambahkan! Pastikan filter tanggal mencakup tanggal data baru.');
         } catch (error) {
             alert('Error: ' + error.message);
         }
@@ -363,6 +383,29 @@ export default function ReportsPage() {
                                         value={manualData.total_cost}
                                         onChange={e => setManualData({ ...manualData, total_cost: e.target.value })}
                                     />
+                                </div>
+
+                                <div className="form-group mb-md">
+                                    <label className="text-sm text-secondary mb-xs block">Produk (Opsional)</label>
+                                    <select
+                                        className="input"
+                                        value={manualData.productId}
+                                        onChange={e => {
+                                            const pid = e.target.value;
+                                            const prod = products.find(p => p.id === pid);
+                                            setManualData({
+                                                ...manualData,
+                                                productId: pid,
+                                                total_sell: prod ? prod.price : manualData.total_sell,
+                                                total_cost: prod ? prod.cost : manualData.total_cost
+                                            });
+                                        }}
+                                    >
+                                        <option value="">-- Pilih Produk (Jika Ada) --</option>
+                                        {products.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 <div className="form-group mb-md">

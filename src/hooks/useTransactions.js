@@ -138,10 +138,10 @@ export function useTransactions(userId, userRole) {
 
     async function createManualTransaction(data) {
         const id = generateTransactionId();
-        const { datetime, count, total_sell, total_cost, notes } = data;
+        const { datetime, count, total_sell, total_cost, notes, items: providedItems } = data;
 
-        // Dummy item for record
-        const items = [{
+        // Use provided items or create dummy item
+        const items = providedItems || [{
             product_id: 'manual',
             name: notes || 'Manual Transaction',
             qty: count || 1,

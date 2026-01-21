@@ -40,6 +40,7 @@ export default function DashboardPage() {
     const [stats, setStats] = useState({ revenue: 0, profit: 0, count: 0 });
     const [topProducts, setTopProducts] = useState([]);
     const [chartData, setChartData] = useState({ labels: [], revenue: [], profit: [] });
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
     // Inventory for low stock alerts
     const { stocks } = useInventory(user?.id, user?.role);
@@ -55,7 +56,10 @@ export default function DashboardPage() {
         if (!txnLoading) {
             calculateStats();
         }
-    }, [transactions, period, txnLoading]);
+        if (!txnLoading) {
+            calculateStats();
+        }
+    }, [transactions, period, selectedYear, txnLoading]);
 
     const calculateStats = () => {
         const now = new Date();
@@ -77,8 +81,8 @@ export default function DashboardPage() {
                 endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
                 break;
             case 'year':
-                startDate = new Date(now.getFullYear(), 0, 1);
-                endDate = new Date(now.getFullYear(), 11, 31);
+                startDate = new Date(selectedYear, 0, 1);
+                endDate = new Date(selectedYear, 11, 31);
                 break;
             default:
                 startDate = new Date(now.setHours(0, 0, 0, 0));
@@ -262,12 +266,25 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Period Filter */}
-                    <div className="period-filter" style={{ display: 'flex', gap: '8px' }}>
+                    <div className="period-filter" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {period === 'year' && (
+                            <select
+                                className="input input-sm"
+                                style={{ width: 'auto', marginRight: '8px' }}
+                                value={selectedYear}
+                                onChange={e => setSelectedYear(parseInt(e.target.value))}
+                            >
+                                {[0, 1, 2, 3, 4].map(OFFSET => {
+                                    const y = new Date().getFullYear() - OFFSET;
+                                    return <option key={y} value={y}>{y}</option>;
+                                })}
+                            </select>
+                        )}
                         {[
                             { key: 'today', label: 'Hari Ini' },
                             { key: 'week', label: '7 Hari' },
                             { key: 'month', label: 'Bulan Ini' },
-                            { key: 'year', label: 'Tahun Ini' }
+                            { key: 'year', label: 'Tahunan' }
                         ].map(p => (
                             <button
                                 key={p.key}
