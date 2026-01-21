@@ -52,7 +52,7 @@ export default function ReportsPage() {
 
     const handleManualSubmit = async (e) => {
         e.preventDefault();
-        if (!manualData.datetime || !manualData.total_sell || !manualData.total_cost) {
+        if (!manualData.datetime || !manualData.total_sell || manualData.total_cost === '') {
             alert('Mohon lengkapi data');
             return;
         }
@@ -396,8 +396,8 @@ export default function ReportsPage() {
                                             setManualData({
                                                 ...manualData,
                                                 productId: pid,
-                                                total_sell: prod ? prod.price : manualData.total_sell,
-                                                total_cost: prod ? prod.cost : manualData.total_cost
+                                                total_sell: prod ? prod.sell_price : manualData.total_sell,
+                                                total_cost: prod ? prod.cost_price : manualData.total_cost
                                             });
                                         }}
                                     >
