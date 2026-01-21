@@ -332,7 +332,7 @@ export default function ReportsPage() {
                             <button className="btn btn-ghost btn-icon" onClick={() => setShowManualModal(false)}>✕</button>
                         </div>
                         <form onSubmit={handleManualSubmit}>
-                            <div className="modal-body">
+                            <div className="modal-body" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
                                 <div className="alert alert-info mb-md" style={{ fontSize: '13px', background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '10px', borderRadius: '6px' }}>
                                     ℹ️ Gunakan fitur ini untuk mencatat omzet lama (sebelum pakai aplikasi). Stok barang tidak akan berkurang.
                                 </div>
