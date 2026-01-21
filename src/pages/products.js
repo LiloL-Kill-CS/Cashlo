@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useProducts } from '@/hooks/useProducts';
-import { formatCurrency } from '@/lib/db';
+import { formatCurrency, formatNumberInput, parseNumberInput } from '@/lib/db';
 
 export default function ProductsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -307,10 +307,10 @@ export default function ProductsPage() {
                                             Harga Jual (Rp) *
                                         </label>
                                         <input
-                                            type="number"
+                                            type="text"
                                             className="input"
-                                            value={formData.sell_price}
-                                            onChange={e => setFormData(prev => ({ ...prev, sell_price: e.target.value }))}
+                                            value={formatNumberInput(formData.sell_price)}
+                                            onChange={e => setFormData(prev => ({ ...prev, sell_price: parseNumberInput(e.target.value) }))}
                                             required
                                         />
                                     </div>
@@ -319,10 +319,10 @@ export default function ProductsPage() {
                                             HPP (Rp) *
                                         </label>
                                         <input
-                                            type="number"
+                                            type="text"
                                             className="input"
-                                            value={formData.cost_price}
-                                            onChange={e => setFormData(prev => ({ ...prev, cost_price: e.target.value }))}
+                                            value={formatNumberInput(formData.cost_price)}
+                                            onChange={e => setFormData(prev => ({ ...prev, cost_price: parseNumberInput(e.target.value) }))}
                                             required
                                         />
                                     </div>
@@ -367,11 +367,11 @@ export default function ProductsPage() {
                                                 onChange={e => updateModifier(idx, 'name', e.target.value)}
                                             />
                                             <input
-                                                type="number"
+                                                type="text"
                                                 className="input"
                                                 placeholder="Harga"
-                                                value={mod.price === 0 ? '' : mod.price}
-                                                onChange={e => updateModifier(idx, 'price', e.target.value)}
+                                                value={formatNumberInput(mod.price)}
+                                                onChange={e => updateModifier(idx, 'price', parseNumberInput(e.target.value))}
                                             />
                                             <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeModifier(idx)}>
                                                 ✕

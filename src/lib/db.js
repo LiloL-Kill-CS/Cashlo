@@ -26,3 +26,15 @@ export function formatDate(date) {
     minute: '2-digit'
   }).format(new Date(date));
 }
+
+// Format number input (1000 -> "1.000")
+export function formatNumberInput(value) {
+  if (!value) return '';
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+// Parse number input ("1.000" -> 1000)
+export function parseNumberInput(value) {
+  if (!value) return '';
+  return value.replace(/\./g, '').replace(/,/g, '');
+}

@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useProducts } from '@/hooks/useProducts';
 import { useExpenses } from '@/hooks/useExpenses';
-import { formatCurrency, formatDate } from '@/lib/db';
+import { formatCurrency, formatDate, formatNumberInput, parseNumberInput } from '@/lib/db';
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -407,13 +407,13 @@ export default function ReportsPage() {
                                     <div className="form-group mb-md">
                                         <label className="text-sm text-secondary mb-xs block">Jumlah Transaksi (Qty)</label>
                                         <input
-                                            type="number"
+                                            type="text"
                                             className="input"
                                             min="1"
                                             required
-                                            value={manualData.count}
+                                            value={formatNumberInput(manualData.count)}
                                             onChange={e => {
-                                                const val = e.target.value;
+                                                const val = parseNumberInput(e.target.value);
                                                 const newCount = parseInt(val) || 0;
                                                 const updates = { count: val };
 
@@ -433,24 +433,24 @@ export default function ReportsPage() {
                                 <div className="form-group mb-md">
                                     <label className="text-sm text-secondary mb-xs block">Total Omzet (Rp)</label>
                                     <input
-                                        type="number"
+                                        type="text"
                                         className="input"
                                         required
                                         placeholder="0"
-                                        value={manualData.total_sell}
-                                        onChange={e => setManualData({ ...manualData, total_sell: e.target.value })}
+                                        value={formatNumberInput(manualData.total_sell)}
+                                        onChange={e => setManualData({ ...manualData, total_sell: parseNumberInput(e.target.value) })}
                                     />
                                 </div>
 
                                 <div className="form-group mb-md">
                                     <label className="text-sm text-secondary mb-xs block">Total Modal / HPP (Rp)</label>
                                     <input
-                                        type="number"
+                                        type="text"
                                         className="input"
                                         required
                                         placeholder="0"
-                                        value={manualData.total_cost}
-                                        onChange={e => setManualData({ ...manualData, total_cost: e.target.value })}
+                                        value={formatNumberInput(manualData.total_cost)}
+                                        onChange={e => setManualData({ ...manualData, total_cost: parseNumberInput(e.target.value) })}
                                     />
                                 </div>
 
@@ -541,12 +541,12 @@ export default function ReportsPage() {
                                         <option value="Lainnya">Lainnya</option>
                                     </select>
                                     <input
-                                        type="number"
+                                        type="text"
                                         className="input input-sm"
                                         placeholder="Jumlah (Rp)"
                                         required
-                                        value={newExpense.amount}
-                                        onChange={e => setNewExpense({ ...newExpense, amount: e.target.value })}
+                                        value={formatNumberInput(newExpense.amount)}
+                                        onChange={e => setNewExpense({ ...newExpense, amount: parseNumberInput(e.target.value) })}
                                     />
                                     <input
                                         type="text"

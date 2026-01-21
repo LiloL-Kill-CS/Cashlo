@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { formatCurrency } from '@/lib/db';
+import { formatCurrency, formatNumberInput, parseNumberInput } from '@/lib/db';
 import { useLoyalty } from '@/hooks/useLoyalty';
 
 export default function PaymentModal({
@@ -14,26 +14,20 @@ export default function PaymentModal({
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [selectedReward, setSelectedReward] = useState(null);
 
-    // Format number with thousand separators (Indonesian style: 1.000.000)
-    const formatWithSeparator = (value) => {
-        if (!value) return '';
-        const num = parseInt(value.toString().replace(/\./g, ''), 10);
-        if (isNaN(num)) return '';
-        return num.toLocaleString('id-ID');
-    };
+    // Use standard helpers
+    // import { formatCurrency, formatNumberInput, parseNumberInput } from '@/lib/db';
 
     // Handle cash input with formatting
     const handleCashInput = (e) => {
-        const rawValue = e.target.value.replace(/\./g, ''); // Remove existing separators
-        const numericValue = rawValue.replace(/\D/g, ''); // Remove non-digits
-        setCashReceived(numericValue);
-        setDisplayCash(formatWithSeparator(numericValue));
+        const rawValue = parseNumberInput(e.target.value);
+        setCashReceived(rawValue);
+        setDisplayCash(formatNumberInput(rawValue));
     };
 
     // Handle quick amount button clicks
     const handleQuickAmount = (amount) => {
         setCashReceived(amount.toString());
-        setDisplayCash(formatWithSeparator(amount));
+        setDisplayCash(formatNumberInput(amount));
     };
 
     // Calculate totals with discount

@@ -3,7 +3,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useInventory } from '@/hooks/useInventory';
 import { useProducts } from '@/hooks/useProducts';
-import { formatDate } from '@/lib/db';
+import { formatDate, formatNumberInput, parseNumberInput } from '@/lib/db';
 
 export default function InventoryPage() {
     const { user, loading: authLoading } = useAuth();
@@ -298,11 +298,11 @@ export default function InventoryPage() {
                                 <div className="form-group mb-md">
                                     <label>Jumlah Stok Baru (Real)</label>
                                     <input
-                                        type="number"
+                                        type="text"
                                         className="input"
                                         required
-                                        value={formData.quantity}
-                                        onChange={e => setFormData({ ...formData, quantity: e.target.value })}
+                                        value={formatNumberInput(formData.quantity)}
+                                        onChange={e => setFormData({ ...formData, quantity: parseNumberInput(e.target.value) })}
                                     />
                                     <p className="text-xs text-secondary mt-xs">Stok tercatat saat ini: {selectedItem.quantity}</p>
                                 </div>

@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePurchasing } from '@/hooks/usePurchasing';
 import { useInventory } from '@/hooks/useInventory';
 import { useProducts } from '@/hooks/useProducts';
-import { formatCurrency, formatDate } from '@/lib/db';
+import { formatCurrency, formatDate, formatNumberInput, parseNumberInput } from '@/lib/db';
 
 export default function PurchasingPage() {
     const { user, loading: authLoading } = useAuth();
@@ -66,7 +66,7 @@ export default function PurchasingPage() {
 
     const updateCartItem = (idx, field, value) => {
         const newCart = [...cart];
-        newCart[idx][field] = parseFloat(value);
+        newCart[idx][field] = parseFloat(parseNumberInput(value)) || 0;
         setCart(newCart);
     };
 
@@ -317,17 +317,17 @@ export default function PurchasingPage() {
                                             <td>{item.name}</td>
                                             <td>
                                                 <input
-                                                    type="number"
+                                                    type="text"
                                                     className="input p-xs"
-                                                    value={item.quantity}
+                                                    value={formatNumberInput(item.quantity)}
                                                     onChange={e => updateCartItem(idx, 'quantity', e.target.value)}
                                                 />
                                             </td>
                                             <td>
                                                 <input
-                                                    type="number"
+                                                    type="text"
                                                     className="input p-xs"
-                                                    value={item.cost_price}
+                                                    value={formatNumberInput(item.cost_price)}
                                                     onChange={e => updateCartItem(idx, 'cost_price', e.target.value)}
                                                 />
                                             </td>
