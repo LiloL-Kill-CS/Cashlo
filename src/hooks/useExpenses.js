@@ -9,9 +9,17 @@ export function useExpenses(userId) {
         if (!userId) return [];
 
         try {
-            // Format as YYYY-MM-DD for DATE column comparison
-            const startStr = startDate.toISOString().split('T')[0];
-            const endStr = endDate.toISOString().split('T')[0];
+            // Use local date components to avoid timezone issues with toISOString()
+            // toISOString() converts to UTC which can shift dates by 1 day
+            const formatLocalDate = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            const startStr = formatLocalDate(startDate);
+            const endStr = formatLocalDate(endDate);
 
             const { data, error } = await supabase
                 .from('expenses')
