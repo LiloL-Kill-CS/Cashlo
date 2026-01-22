@@ -155,20 +155,21 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
         return generateFallbackResponse(userMessage);
     }
 
-    // Using Mistral-7B-Instruct - free and powerful model (new router endpoint)
-    const response = await fetch('https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2', {
+    // Use OpenAI-compatible endpoint
+    const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            inputs: `<s>[INST] ${systemPrompt}\n\nUser: ${userMessage} [/INST]`,
-            parameters: {
-                max_new_tokens: 500,
-                temperature: 0.7,
-                return_full_text: false
-            }
+            model: 'mistralai/Mistral-7B-Instruct-v0.2',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userMessage }
+            ],
+            max_tokens: 500,
+            temperature: 0.7
         })
     });
 
@@ -176,15 +177,14 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
 
     if (data.error) {
         // Model might be loading, return friendly message
-        if (data.error.includes('loading')) {
+        if (data.error.includes && data.error.includes('loading')) {
             return '⏳ Model sedang loading, coba lagi dalam beberapa detik...';
         }
-        throw new Error(data.error || 'Hugging Face API error');
+        throw new Error(data.error.message || data.error || 'Hugging Face API error');
     }
 
-    // Extract generated text
-    const text = Array.isArray(data) ? data[0]?.generated_text : data.generated_text;
-    return text || 'Maaf, saya tidak bisa memproses permintaan Anda.';
+    // OpenAI format response
+    return data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
 }
 
 function generateFallbackResponse(message) {
