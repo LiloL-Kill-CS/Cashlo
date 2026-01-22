@@ -155,15 +155,15 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
         return generateFallbackResponse(userMessage);
     }
 
-    // Use HuggingFace Router with text-generation model (free)
-    const response = await fetch('https://router.huggingface.co/hf-inference/models/google/gemma-2-2b-it/v1/chat/completions', {
+    // Use HuggingFace Router with OpenAI-compatible endpoint (free)
+    const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: 'google/gemma-2-2b-it',
+            model: 'Qwen/Qwen2.5-Coder-32B-Instruct',
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userMessage }
