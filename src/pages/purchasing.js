@@ -27,6 +27,7 @@ export default function PurchasingPage() {
         notes: ''
     });
     const [cart, setCart] = useState([]);
+    const [customItem, setCustomItem] = useState({ name: '', quantity: 1, cost_price: '' });
 
     useEffect(() => {
         if (!authLoading && !user) window.location.href = '/';
@@ -72,6 +73,24 @@ export default function PurchasingPage() {
 
     const removeCartItem = (idx) => {
         setCart(cart.filter((_, i) => i !== idx));
+    };
+
+    const addCustomItem = () => {
+        if (!customItem.name.trim()) {
+            alert('Masukkan nama item');
+            return;
+        }
+        const price = parseFloat(parseNumberInput(customItem.cost_price)) || 0;
+        const qty = parseInt(customItem.quantity) || 1;
+
+        setCart([...cart, {
+            product_id: `custom-${Date.now()}`,
+            name: customItem.name.trim(),
+            quantity: qty,
+            cost_price: price,
+            is_custom: true
+        }]);
+        setCustomItem({ name: '', quantity: 1, cost_price: '' });
     };
 
     const totalAmount = cart.reduce((sum, item) => sum + (item.quantity * item.cost_price), 0);
@@ -284,8 +303,8 @@ export default function PurchasingPage() {
                             <hr style={{ borderColor: 'var(--color-border)', margin: '16px 0' }} />
 
                             {/* Item Selection */}
-                            <div className="mb-md">
-                                <label>Tambah Produk ke Form:</label>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>Tambah Produk dari Menu:</label>
                                 <select
                                     className="input"
                                     onChange={(e) => {
@@ -293,11 +312,63 @@ export default function PurchasingPage() {
                                         e.target.value = '';
                                     }}
                                 >
-                                    <option value="">Cari Produk...</option>
+                                    <option value="">-- Pilih Produk Menu --</option>
                                     {products.map(p => (
                                         <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            {/* Custom Item Input */}
+                            <div style={{
+                                padding: '12px',
+                                background: 'var(--color-bg-secondary)',
+                                borderRadius: '8px',
+                                marginBottom: '16px'
+                            }}>
+                                <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>
+                                    ➕ Tambah Item Non-Menu (Cup, Sirup, Bahan, dll):
+                                </label>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '8px', alignItems: 'end' }}>
+                                    <div>
+                                        <label className="text-xs text-muted">Nama Item</label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            placeholder="Contoh: Cup 12oz"
+                                            value={customItem.name}
+                                            onChange={e => setCustomItem({ ...customItem, name: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-muted">Qty</label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            placeholder="1"
+                                            value={formatNumberInput(customItem.quantity)}
+                                            onChange={e => setCustomItem({ ...customItem, quantity: parseNumberInput(e.target.value) })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-muted">Harga (Rp)</label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            placeholder="0"
+                                            value={formatNumberInput(customItem.cost_price)}
+                                            onChange={e => setCustomItem({ ...customItem, cost_price: parseNumberInput(e.target.value) })}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={addCustomItem}
+                                        style={{ height: '42px' }}
+                                    >
+                                        + Tambah
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Items Table */}
