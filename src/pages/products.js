@@ -12,6 +12,8 @@ export default function ProductsPage() {
     const [editingProduct, setEditingProduct] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
 
     // Form state
     const [formData, setFormData] = useState({
@@ -100,6 +102,20 @@ export default function ProductsPage() {
         }
     };
 
+    const handleAddCategory = async () => {
+        if (!newCategoryName.trim()) {
+            alert('Nama kategori tidak boleh kosong');
+            return;
+        }
+        try {
+            await addCategory(newCategoryName.trim());
+            setNewCategoryName('');
+            alert('Kategori berhasil ditambahkan!');
+        } catch (error) {
+            alert('Gagal menambah kategori: ' + error.message);
+        }
+    };
+
     const addModifier = () => {
         setFormData(prev => ({
             ...prev,
@@ -164,9 +180,14 @@ export default function ProductsPage() {
                         <p className="text-secondary text-sm">Kelola menu dan harga</p>
                     </div>
 
-                    <button className="btn btn-primary" onClick={openAddModal}>
-                        + Tambah Produk
-                    </button>
+                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                        <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
+                            📁 Kategori
+                        </button>
+                        <button className="btn btn-primary" onClick={openAddModal}>
+                            + Tambah Produk
+                        </button>
+                    </div>
                 </header>
 
                 <div style={{ padding: 'var(--spacing-lg)' }}>
@@ -390,6 +411,68 @@ export default function ProductsPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Category Management Modal */}
+            {showCategoryModal && (
+                <div className="modal-overlay" onClick={() => setShowCategoryModal(false)}>
+                    <div className="modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 className="modal-title">Kelola Kategori</h3>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowCategoryModal(false)}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            {/* Add New Category */}
+                            <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-lg)' }}>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    placeholder="Nama kategori baru..."
+                                    value={newCategoryName}
+                                    onChange={e => setNewCategoryName(e.target.value)}
+                                    onKeyPress={e => e.key === 'Enter' && handleAddCategory()}
+                                    style={{ flex: 1 }}
+                                />
+                                <button className="btn btn-primary" onClick={handleAddCategory}>
+                                    + Tambah
+                                </button>
+                            </div>
+
+                            {/* Category List */}
+                            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-md)' }}>
+                                <h4 className="text-sm text-secondary" style={{ marginBottom: 'var(--spacing-sm)' }}>
+                                    Kategori Saat Ini ({categories.length})
+                                </h4>
+                                {categories.length === 0 ? (
+                                    <p className="text-muted text-sm">Belum ada kategori. Tambahkan kategori pertama Anda!</p>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+                                        {categories.map(cat => (
+                                            <div key={cat.id} style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                padding: 'var(--spacing-sm) var(--spacing-md)',
+                                                background: 'var(--color-bg-secondary)',
+                                                borderRadius: 'var(--radius-md)'
+                                            }}>
+                                                <span>{cat.name}</span>
+                                                <span className="text-muted text-xs">
+                                                    {products.filter(p => p.category === cat.id).length} produk
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-secondary" onClick={() => setShowCategoryModal(false)}>
+                                Tutup
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
