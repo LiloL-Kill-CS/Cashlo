@@ -23,8 +23,8 @@ export default async function handler(req, res) {
         // Build prompt with business context
         const systemPrompt = buildSystemPrompt(businessContext);
 
-        // Call DeepSeek API
-        const aiResponse = await callDeepSeekAPI(systemPrompt, message);
+        // Call Hugging Face API (FREE)
+        const aiResponse = await callHuggingFaceAPI(systemPrompt, message);
 
         return res.status(200).json({ response: aiResponse });
     } catch (error) {
@@ -147,38 +147,44 @@ INSTRUKSI:
 - Jawab singkat dan to the point (maksimal 3-4 paragraf)`;
 }
 
-async function callDeepSeekAPI(systemPrompt, userMessage) {
-    const apiKey = process.env.DEEPSEEK_API_KEY;
+async function callHuggingFaceAPI(systemPrompt, userMessage) {
+    const apiKey = process.env.HUGGINGFACE_API_KEY;
 
     if (!apiKey) {
         // Fallback response when no API key
         return generateFallbackResponse(userMessage);
     }
 
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
+    // Using Mistral-7B-Instruct - free and powerful model
+    const response = await fetch('https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage }
-            ],
-            max_tokens: 500,
-            temperature: 0.7
+            inputs: `<s>[INST] ${systemPrompt}\n\nUser: ${userMessage} [/INST]`,
+            parameters: {
+                max_new_tokens: 500,
+                temperature: 0.7,
+                return_full_text: false
+            }
         })
     });
 
     const data = await response.json();
 
     if (data.error) {
-        throw new Error(data.error.message || 'DeepSeek API error');
+        // Model might be loading, return friendly message
+        if (data.error.includes('loading')) {
+            return '⏳ Model sedang loading, coba lagi dalam beberapa detik...';
+        }
+        throw new Error(data.error || 'Hugging Face API error');
     }
 
-    return data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
+    // Extract generated text
+    const text = Array.isArray(data) ? data[0]?.generated_text : data.generated_text;
+    return text || 'Maaf, saya tidak bisa memproses permintaan Anda.';
 }
 
 function generateFallbackResponse(message) {
@@ -186,14 +192,15 @@ function generateFallbackResponse(message) {
     const lower = message.toLowerCase();
 
     if (lower.includes('profit') || lower.includes('untung')) {
-        return '📊 Untuk melihat profit, silakan cek Dashboard atau halaman Laporan. Saya membutuhkan koneksi ke DeepSeek API untuk memberikan analisis detail.';
+        return '📊 Untuk melihat profit, silakan cek Dashboard atau halaman Laporan. Tambahkan HUGGINGFACE_API_KEY untuk analisis AI lebih detail.';
     }
     if (lower.includes('stok') || lower.includes('restock')) {
         return '📦 Cek halaman Inventory untuk melihat status stok. Produk dengan stok ≤5 akan ditandai merah.';
     }
     if (lower.includes('laris') || lower.includes('terlaris')) {
-        return '🏆 Produk terlaris bisa dilihat di Dashboard. Untuk analisis AI, tambahkan DEEPSEEK_API_KEY di environment variables.';
+        return '🏆 Produk terlaris bisa dilihat di Dashboard.';
     }
 
-    return '🤖 Untuk mengaktifkan AI penuh, tambahkan DEEPSEEK_API_KEY ke environment variables. Daftar gratis di https://platform.deepseek.com. Sementara itu, silakan gunakan Dashboard dan Laporan untuk melihat data bisnis Anda.';
+    return '🤖 Untuk AI penuh GRATIS, daftar di https://huggingface.co → Settings → Access Tokens → New Token. Lalu tambahkan HUGGINGFACE_API_KEY di Vercel.';
 }
+
