@@ -155,8 +155,8 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
         return generateFallbackResponse(userMessage);
     }
 
-    // Using Mistral-7B-Instruct - free and powerful model
-    const response = await fetch('https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2', {
+    // Using Mistral-7B-Instruct - free and powerful model (new router endpoint)
+    const response = await fetch('https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
