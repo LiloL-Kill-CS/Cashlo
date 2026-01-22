@@ -155,21 +155,20 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
         return generateFallbackResponse(userMessage);
     }
 
-    // Use OpenAI-compatible endpoint
-    const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+    // Use HuggingFace Serverless Inference API with Qwen model (free)
+    const response = await fetch('https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: 'mistralai/Mistral-7B-Instruct-v0.2',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage }
-            ],
-            max_tokens: 500,
-            temperature: 0.7
+            inputs: `<|im_start|>system\n${systemPrompt}<|im_end|>\n<|im_start|>user\n${userMessage}<|im_end|>\n<|im_start|>assistant\n`,
+            parameters: {
+                max_new_tokens: 500,
+                temperature: 0.7,
+                return_full_text: false
+            }
         })
     });
 
@@ -178,13 +177,17 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
     if (data.error) {
         // Model might be loading, return friendly message
         if (data.error.includes && data.error.includes('loading')) {
-            return '⏳ Model sedang loading, coba lagi dalam beberapa detik...';
+            return '⏳ Model sedang loading, coba lagi dalam 10-30 detik...';
+        }
+        if (data.error.includes && data.error.includes('rate limit')) {
+            return '⚠️ Rate limit tercapai, coba lagi dalam beberapa menit...';
         }
         throw new Error(data.error.message || data.error || 'Hugging Face API error');
     }
 
-    // OpenAI format response
-    return data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
+    // Serverless inference returns array of generated text
+    const text = Array.isArray(data) ? data[0]?.generated_text : data.generated_text;
+    return text || 'Maaf, saya tidak bisa memproses permintaan Anda.';
 }
 
 function generateFallbackResponse(message) {
