@@ -3,27 +3,34 @@
     "short_name": "Cashlo",
     "description": "Premium Coffee Shop Point of Sale",
     "start_url": "/",
+    "id": "/",
     "display": "standalone",
     "background_color": "#0a0a0a",
     "theme_color": "#0a0a0a",
     "orientation": "any",
     "icons": [
         {
-            "src": "/icons/icon.svg",
-            "sizes": "any",
-            "type": "image/svg+xml",
+            "src": "https://via.placeholder.com/192x192/0a0a0a/ffffff?text=C",
+            "sizes": "192x192",
+            "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "/icons/icon.svg",
+            "src": "https://via.placeholder.com/512x512/0a0a0a/ffffff?text=C",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "https://via.placeholder.com/192x192/0a0a0a/ffffff?text=C",
             "sizes": "192x192",
-            "type": "image/svg+xml",
+            "type": "image/png",
             "purpose": "maskable"
         },
         {
-            "src": "/icons/icon.svg",
+            "src": "https://via.placeholder.com/512x512/0a0a0a/ffffff?text=C",
             "sizes": "512x512",
-            "type": "image/svg+xml",
+            "type": "image/png",
             "purpose": "maskable"
         }
     ],

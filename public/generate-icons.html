@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Generate PWA Icons</title>
+</head>
+
+<body>
+    <h1>PWA Icon Generator</h1>
+    <canvas id="canvas" width="512" height="512"></canvas>
+    <br><br>
+    <a id="download512" download="icon-512x512.png">Download 512x512</a>
+    <a id="download192" download="icon-192x192.png">Download 192x192</a>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Draw background
+        ctx.fillStyle = '#0a0a0a';
+        ctx.beginPath();
+        ctx.roundRect(0, 0, 512, 512, 80);
+        ctx.fill();
+
+        // Draw text
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 280px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('C', 256, 280);
+
+        // Create download links
+        document.getElementById('download512').href = canvas.toDataURL('image/png');
+
+        // Create 192x192 version
+        const canvas192 = document.createElement('canvas');
+        canvas192.width = 192;
+        canvas192.height = 192;
+        const ctx192 = canvas192.getContext('2d');
+        ctx192.drawImage(canvas, 0, 0, 512, 512, 0, 0, 192, 192);
+        document.getElementById('download192').href = canvas192.toDataURL('image/png');
+    </script>
+</body>
+
+</html>
