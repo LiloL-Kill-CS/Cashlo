@@ -24,7 +24,64 @@ export default function ReportsPage() {
     const [showManualModal, setShowManualModal] = useState(false);
     const [showExpenseModal, setShowExpenseModal] = useState(false);
     const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
-    const [manualData, setManualData] = useState({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '', productId: '' });
+    const [manualData, setManualData] = useState({ datetime: '', notes: '', cartItems: [] });
+
+    // Calculate totals from cart items
+    const manualCartTotals = manualData.cartItems.reduce((acc, item) => ({
+        totalSell: acc.totalSell + (item.sell_price * item.qty),
+        totalCost: acc.totalCost + (item.cost_price * item.qty),
+        totalProfit: acc.totalProfit + ((item.sell_price - item.cost_price) * item.qty)
+    }), { totalSell: 0, totalCost: 0, totalProfit: 0 });
+
+    const addProductToManualCart = (productId) => {
+        const product = products.find(p => p.id === productId);
+        if (!product) return;
+
+        setManualData(prev => {
+            const existing = prev.cartItems.find(i => i.product_id === productId);
+            if (existing) {
+                return {
+                    ...prev,
+                    cartItems: prev.cartItems.map(i =>
+                        i.product_id === productId ? { ...i, qty: i.qty + 1 } : i
+                    )
+                };
+            }
+            return {
+                ...prev,
+                cartItems: [...prev.cartItems, {
+                    product_id: product.id,
+                    name: product.name,
+                    qty: 1,
+                    sell_price: product.sell_price,
+                    cost_price: product.cost_price
+                }]
+            };
+        });
+    };
+
+    const updateManualCartQty = (productId, newQty) => {
+        if (newQty < 1) {
+            setManualData(prev => ({
+                ...prev,
+                cartItems: prev.cartItems.filter(i => i.product_id !== productId)
+            }));
+        } else {
+            setManualData(prev => ({
+                ...prev,
+                cartItems: prev.cartItems.map(i =>
+                    i.product_id === productId ? { ...i, qty: newQty } : i
+                )
+            }));
+        }
+    };
+
+    const removeFromManualCart = (productId) => {
+        setManualData(prev => ({
+            ...prev,
+            cartItems: prev.cartItems.filter(i => i.product_id !== productId)
+        }));
+    };
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -68,39 +125,41 @@ export default function ReportsPage() {
 
     const handleManualSubmit = async (e) => {
         e.preventDefault();
-        if (!manualData.datetime || !manualData.total_sell || manualData.total_cost === '') {
-            alert('Mohon lengkapi data');
+        if (!manualData.datetime) {
+            alert('Mohon pilih tanggal dan waktu');
+            return;
+        }
+        if (manualData.cartItems.length === 0) {
+            alert('Mohon tambahkan minimal 1 produk');
             return;
         }
 
         try {
-            let items = null;
-            if (manualData.productId) {
-                const prod = products.find(p => p.id === manualData.productId);
-                if (prod) {
-                    items = [{
-                        product_id: prod.id,
-                        name: prod.name,
-                        qty: parseInt(manualData.count) || 1,
-                        sell_price: parseFloat(manualData.total_sell),
-                        cost_price: parseFloat(manualData.total_cost),
-                        total_sell: parseFloat(manualData.total_sell),
-                        total_cost: parseFloat(manualData.total_cost),
-                        profit: parseFloat(manualData.total_sell) - parseFloat(manualData.total_cost)
-                    }];
-                }
-            }
+            // Build items array from cart
+            const items = manualData.cartItems.map(item => ({
+                product_id: item.product_id,
+                name: item.name,
+                qty: item.qty,
+                sell_price: item.sell_price,
+                cost_price: item.cost_price,
+                total_sell: item.sell_price * item.qty,
+                total_cost: item.cost_price * item.qty,
+                profit: (item.sell_price - item.cost_price) * item.qty
+            }));
+
+            const totalQty = manualData.cartItems.reduce((sum, i) => sum + i.qty, 0);
 
             await createManualTransaction({
-                ...manualData,
-                total_sell: parseFloat(manualData.total_sell),
-                total_cost: parseFloat(manualData.total_cost),
-                count: parseInt(manualData.count) || 1,
-                items,
-                datetime: new Date(manualData.datetime).toISOString()
+                datetime: new Date(manualData.datetime).toISOString(),
+                total_sell: manualCartTotals.totalSell,
+                total_cost: manualCartTotals.totalCost,
+                count: totalQty,
+                notes: manualData.notes,
+                items
             });
+
             setShowManualModal(false);
-            setManualData({ datetime: '', total_sell: '', total_cost: '', count: 1, notes: '', productId: '' });
+            setManualData({ datetime: '', notes: '', cartItems: [] });
             alert('Data lama berhasil ditambahkan! Pastikan filter tanggal mencakup tanggal data baru.');
         } catch (error) {
             alert('Error: ' + error.message);
@@ -392,7 +451,7 @@ export default function ReportsPage() {
             </main>
             {showManualModal && (
                 <div className="modal-overlay" onClick={() => setShowManualModal(false)}>
-                    <div className="modal" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+                    <div className="modal" style={{ maxWidth: '700px', width: '95%' }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Input Data Transaksi Lama</h3>
                             <button className="btn btn-ghost btn-icon" onClick={() => setShowManualModal(false)}>✕</button>
@@ -400,12 +459,13 @@ export default function ReportsPage() {
                         <form onSubmit={handleManualSubmit}>
                             <div className="modal-body" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
                                 <div className="alert alert-info mb-md" style={{ fontSize: '13px', background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '10px', borderRadius: '6px' }}>
-                                    ℹ️ Gunakan fitur ini untuk mencatat omzet lama (sebelum pakai aplikasi). Stok barang tidak akan berkurang.
+                                    ℹ️ Pilih beberapa produk sekaligus untuk 1 transaksi. Stok tidak akan berkurang.
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-md" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                    <div className="form-group mb-md">
-                                        <label className="text-sm text-secondary mb-xs block">Tanggal & Waktu</label>
+                                {/* Date & Notes Row */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>Tanggal & Waktu *</label>
                                         <input
                                             type="datetime-local"
                                             className="input"
@@ -414,96 +474,110 @@ export default function ReportsPage() {
                                             onChange={e => setManualData({ ...manualData, datetime: e.target.value })}
                                         />
                                     </div>
-                                    <div className="form-group mb-md">
-                                        <label className="text-sm text-secondary mb-xs block">Jumlah Transaksi (Qty)</label>
+                                    <div>
+                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>Catatan</label>
                                         <input
                                             type="text"
                                             className="input"
-                                            min="1"
-                                            required
-                                            value={formatNumberInput(manualData.count)}
-                                            onChange={e => {
-                                                const val = parseNumberInput(e.target.value);
-                                                const newCount = parseInt(val) || 0;
-                                                const updates = { count: val };
-
-                                                if (manualData.productId) {
-                                                    const prod = products.find(p => p.id === manualData.productId);
-                                                    if (prod) {
-                                                        updates.total_sell = prod.sell_price * newCount;
-                                                        updates.total_cost = prod.cost_price * newCount;
-                                                    }
-                                                }
-                                                setManualData({ ...manualData, ...updates });
-                                            }}
+                                            placeholder="Contoh: Rekap Januari"
+                                            value={manualData.notes}
+                                            onChange={e => setManualData({ ...manualData, notes: e.target.value })}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="form-group mb-md">
-                                    <label className="text-sm text-secondary mb-xs block">Total Omzet (Rp)</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        required
-                                        placeholder="0"
-                                        value={formatNumberInput(manualData.total_sell)}
-                                        onChange={e => setManualData({ ...manualData, total_sell: parseNumberInput(e.target.value) })}
-                                    />
-                                </div>
-
-                                <div className="form-group mb-md">
-                                    <label className="text-sm text-secondary mb-xs block">Total Modal / HPP (Rp)</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        required
-                                        placeholder="0"
-                                        value={formatNumberInput(manualData.total_cost)}
-                                        onChange={e => setManualData({ ...manualData, total_cost: parseNumberInput(e.target.value) })}
-                                    />
-                                </div>
-
-                                <div className="form-group mb-md">
-                                    <label className="text-sm text-secondary mb-xs block">Produk (Opsional)</label>
-                                    <select
-                                        className="input"
-                                        value={manualData.productId}
-                                        onChange={e => {
-                                            const pid = e.target.value;
-                                            const prod = products.find(p => p.id === pid);
-                                            const qty = parseInt(manualData.count) || 1;
-                                            setManualData({
-                                                ...manualData,
-                                                productId: pid,
-                                                total_sell: prod ? (prod.sell_price * qty) : manualData.total_sell,
-                                                total_cost: prod ? (prod.cost_price * qty) : manualData.total_cost
-                                            });
-                                        }}
-                                    >
-                                        <option value="">-- Pilih Produk (Jika Ada) --</option>
+                                {/* Product Grid */}
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>Pilih Produk (Klik untuk tambah)</label>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                                        gap: '8px',
+                                        maxHeight: '200px',
+                                        overflowY: 'auto',
+                                        padding: '8px',
+                                        background: 'var(--color-bg-secondary)',
+                                        borderRadius: '8px'
+                                    }}>
                                         {products.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                            <button
+                                                type="button"
+                                                key={p.id}
+                                                onClick={() => addProductToManualCart(p.id)}
+                                                style={{
+                                                    padding: '10px 8px',
+                                                    background: manualData.cartItems.some(i => i.product_id === p.id)
+                                                        ? 'var(--color-primary)'
+                                                        : 'var(--color-bg-tertiary)',
+                                                    color: manualData.cartItems.some(i => i.product_id === p.id)
+                                                        ? '#000'
+                                                        : 'inherit',
+                                                    border: 'none',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '12px',
+                                                    textAlign: 'center'
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: '500', marginBottom: '2px' }}>{p.name}</div>
+                                                <div style={{ fontSize: '10px', opacity: 0.8 }}>{formatCurrency(p.sell_price)}</div>
+                                            </button>
                                         ))}
-                                    </select>
+                                        {products.length === 0 && (
+                                            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                                                Belum ada produk. Tambahkan produk dulu di halaman Produk.
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
-                                <div className="form-group mb-md">
-                                    <label className="text-sm text-secondary mb-xs block">Catatan (Opsional)</label>
-                                    <textarea
-                                        className="input"
-                                        placeholder="Contoh: Rekap Januari 2024"
-                                        value={manualData.notes}
-                                        onChange={e => setManualData({ ...manualData, notes: e.target.value })}
-                                    ></textarea>
-                                </div>
+                                {/* Cart Items */}
+                                {manualData.cartItems.length > 0 && (
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>
+                                            Produk Dipilih ({manualData.cartItems.length})
+                                        </label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {manualData.cartItems.map(item => (
+                                                <div key={item.product_id} style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    padding: '10px 12px',
+                                                    background: 'var(--color-bg-tertiary)',
+                                                    borderRadius: '8px'
+                                                }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: '500' }}>{item.name}</div>
+                                                        <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                                                            {formatCurrency(item.sell_price)} × {item.qty} = {formatCurrency(item.sell_price * item.qty)}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => updateManualCartQty(item.product_id, item.qty - 1)}>−</button>
+                                                        <span style={{ minWidth: '24px', textAlign: 'center', fontWeight: '600' }}>{item.qty}</span>
+                                                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => updateManualCartQty(item.product_id, item.qty + 1)}>+</button>
+                                                        <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => removeFromManualCart(item.product_id)}>✕</button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
-                                <div className="bg-tertiary p-md rounded" style={{ background: 'var(--color-bg-tertiary)', padding: '12px', borderRadius: '8px' }}>
-                                    <div className="flex justify-between mb-xs">
-                                        <span className="text-sm">Profit (Auto):</span>
-                                        <span className="font-bold text-success">
-                                            {formatCurrency((parseFloat(manualData.total_sell) || 0) - (parseFloat(manualData.total_cost) || 0))}
-                                        </span>
+                                {/* Totals Summary */}
+                                <div style={{ background: 'var(--color-bg-tertiary)', padding: '12px', borderRadius: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                        <span className="text-secondary">Total Omzet:</span>
+                                        <span style={{ fontWeight: '600' }}>{formatCurrency(manualCartTotals.totalSell)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                        <span className="text-secondary">Total HPP:</span>
+                                        <span style={{ color: 'var(--color-warning)' }}>{formatCurrency(manualCartTotals.totalCost)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid var(--color-border)' }}>
+                                        <span style={{ fontWeight: '600' }}>Profit:</span>
+                                        <span style={{ color: 'var(--color-success)', fontWeight: '700' }}>+{formatCurrency(manualCartTotals.totalProfit)}</span>
                                     </div>
                                 </div>
                             </div>
