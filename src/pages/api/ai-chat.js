@@ -23,8 +23,8 @@ export default async function handler(req, res) {
         // Build prompt with business context
         const systemPrompt = buildSystemPrompt(businessContext);
 
-        // Call Gemini API
-        const aiResponse = await callGeminiAPI(systemPrompt, message);
+        // Call DeepSeek API
+        const aiResponse = await callDeepSeekAPI(systemPrompt, message);
 
         return res.status(200).json({ response: aiResponse });
     } catch (error) {
@@ -147,38 +147,38 @@ INSTRUKSI:
 - Jawab singkat dan to the point (maksimal 3-4 paragraf)`;
 }
 
-async function callGeminiAPI(systemPrompt, userMessage) {
-    const apiKey = process.env.GEMINI_API_KEY;
+async function callDeepSeekAPI(systemPrompt, userMessage) {
+    const apiKey = process.env.DEEPSEEK_API_KEY;
 
     if (!apiKey) {
         // Fallback response when no API key
         return generateFallbackResponse(userMessage);
     }
 
-    const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: `${systemPrompt}\n\nPertanyaan User: ${userMessage}` }]
-                }],
-                generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 500
-                }
-            })
-        }
-    );
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userMessage }
+            ],
+            max_tokens: 500,
+            temperature: 0.7
+        })
+    });
 
     const data = await response.json();
 
     if (data.error) {
-        throw new Error(data.error.message || 'Gemini API error');
+        throw new Error(data.error.message || 'DeepSeek API error');
     }
 
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Maaf, saya tidak bisa memproses permintaan Anda.';
+    return data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
 }
 
 function generateFallbackResponse(message) {
@@ -186,14 +186,14 @@ function generateFallbackResponse(message) {
     const lower = message.toLowerCase();
 
     if (lower.includes('profit') || lower.includes('untung')) {
-        return '📊 Untuk melihat profit, silakan cek Dashboard atau halaman Laporan. Saya membutuhkan koneksi ke Gemini API untuk memberikan analisis detail.';
+        return '📊 Untuk melihat profit, silakan cek Dashboard atau halaman Laporan. Saya membutuhkan koneksi ke DeepSeek API untuk memberikan analisis detail.';
     }
     if (lower.includes('stok') || lower.includes('restock')) {
         return '📦 Cek halaman Inventory untuk melihat status stok. Produk dengan stok ≤5 akan ditandai merah.';
     }
     if (lower.includes('laris') || lower.includes('terlaris')) {
-        return '🏆 Produk terlaris bisa dilihat di Dashboard. Untuk analisis AI, tambahkan GEMINI_API_KEY di environment variables.';
+        return '🏆 Produk terlaris bisa dilihat di Dashboard. Untuk analisis AI, tambahkan DEEPSEEK_API_KEY di environment variables.';
     }
 
-    return '🤖 Untuk mengaktifkan AI penuh, tambahkan GEMINI_API_KEY ke environment variables. Sementara itu, silakan gunakan Dashboard dan Laporan untuk melihat data bisnis Anda.';
+    return '🤖 Untuk mengaktifkan AI penuh, tambahkan DEEPSEEK_API_KEY ke environment variables. Daftar gratis di https://platform.deepseek.com. Sementara itu, silakan gunakan Dashboard dan Laporan untuk melihat data bisnis Anda.';
 }
