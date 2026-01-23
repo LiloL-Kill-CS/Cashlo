@@ -4,12 +4,14 @@ import { supabase } from '@/lib/supabase';
 export function usePurchasing(userId, userRole) {
     const [suppliers, setSuppliers] = useState([]);
     const [purchases, setPurchases] = useState([]);
+    const [supplies, setSupplies] = useState([]); // Non-menu items like cups, syrup, ingredients
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (userId) {
             loadSuppliers();
             loadPurchases();
+            loadSupplies();
         }
     }, [userId]);
 
@@ -67,6 +69,43 @@ export function usePurchasing(userId, userRole) {
         const { error } = await supabase.from('suppliers').delete().eq('id', id);
         if (error) throw error;
         await loadSuppliers();
+    }
+
+    // --- Supplies (Non-Menu Items) ---
+    async function loadSupplies() {
+        try {
+            const { data, error } = await supabase
+                .from('supplies')
+                .select('*')
+                .eq('owner_id', userId)
+                .order('name');
+            if (error) throw error;
+            setSupplies(data || []);
+        } catch (error) {
+            console.error('Error loading supplies:', error);
+            setSupplies([]);
+        }
+    }
+
+    async function addSupply(data) {
+        const { error } = await supabase.from('supplies').insert([{
+            ...data,
+            owner_id: userId
+        }]);
+        if (error) throw error;
+        await loadSupplies();
+    }
+
+    async function updateSupply(id, data) {
+        const { error } = await supabase.from('supplies').update(data).eq('id', id);
+        if (error) throw error;
+        await loadSupplies();
+    }
+
+    async function deleteSupply(id) {
+        const { error } = await supabase.from('supplies').delete().eq('id', id);
+        if (error) throw error;
+        await loadSupplies();
     }
 
     async function createPurchase(purchaseData, items) {
@@ -136,11 +175,15 @@ export function usePurchasing(userId, userRole) {
     return {
         suppliers,
         purchases,
+        supplies,
         loading,
         addSupplier,
         updateSupplier,
         deleteSupplier,
+        addSupply,
+        updateSupply,
+        deleteSupply,
         createPurchase,
-        reload: () => { loadSuppliers(); loadPurchases(); }
+        reload: () => { loadSuppliers(); loadPurchases(); loadSupplies(); }
     };
 }
