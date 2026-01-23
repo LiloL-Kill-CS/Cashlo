@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useProducts } from '@/hooks/useProducts';
 import { useExpenses } from '@/hooks/useExpenses';
+import { usePurchasing } from '@/hooks/usePurchasing';
 import { formatCurrency, formatDate, formatNumberInput, parseNumberInput } from '@/lib/db';
 
 export default function ReportsPage() {
@@ -11,6 +12,7 @@ export default function ReportsPage() {
     const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction } = useTransactions(user?.id, user?.role);
     const { products } = useProducts(user?.id, user?.role);
     const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses(user?.id);
+    const { supplies } = usePurchasing(user?.id, user?.role);
 
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
@@ -81,6 +83,34 @@ export default function ReportsPage() {
             ...prev,
             cartItems: prev.cartItems.filter(i => i.product_id !== productId)
         }));
+    };
+
+    const addSupplyToManualCart = (supplyId) => {
+        const supply = supplies.find(s => s.id === supplyId);
+        if (!supply) return;
+
+        setManualData(prev => {
+            const existing = prev.cartItems.find(i => i.product_id === supplyId);
+            if (existing) {
+                return {
+                    ...prev,
+                    cartItems: prev.cartItems.map(i =>
+                        i.product_id === supplyId ? { ...i, qty: i.qty + 1 } : i
+                    )
+                };
+            }
+            return {
+                ...prev,
+                cartItems: [...prev.cartItems, {
+                    product_id: supply.id,
+                    name: `📦 ${supply.name}`,
+                    qty: 1,
+                    sell_price: supply.default_price || 0,
+                    cost_price: supply.default_price || 0,
+                    is_supply: true
+                }]
+            };
+        });
     };
 
     useEffect(() => {
@@ -530,6 +560,48 @@ export default function ReportsPage() {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Supplies (Non-Menu Items) Grid */}
+                                {supplies && supplies.length > 0 && (
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>📦 Tambah Bahan/Supply (Non-Menu):</label>
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                                            gap: '8px',
+                                            maxHeight: '150px',
+                                            overflowY: 'auto',
+                                            padding: '8px',
+                                            background: 'var(--color-bg-secondary)',
+                                            borderRadius: '8px'
+                                        }}>
+                                            {supplies.map(s => (
+                                                <button
+                                                    type="button"
+                                                    key={s.id}
+                                                    onClick={() => addSupplyToManualCart(s.id)}
+                                                    style={{
+                                                        padding: '10px 8px',
+                                                        background: manualData.cartItems.some(i => i.product_id === s.id)
+                                                            ? 'var(--color-warning)'
+                                                            : 'var(--color-bg-tertiary)',
+                                                        color: manualData.cartItems.some(i => i.product_id === s.id)
+                                                            ? '#000'
+                                                            : 'inherit',
+                                                        border: 'none',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '12px',
+                                                        textAlign: 'center'
+                                                    }}
+                                                >
+                                                    <div style={{ fontWeight: '500', marginBottom: '2px' }}>📦 {s.name}</div>
+                                                    <div style={{ fontSize: '10px', opacity: 0.8 }}>{s.unit} - {formatCurrency(s.default_price || 0)}</div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Cart Items */}
                                 {manualData.cartItems.length > 0 && (
