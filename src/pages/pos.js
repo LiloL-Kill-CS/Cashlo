@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatCurrency } from '@/lib/db';
 import Sidebar from '@/components/layout/Sidebar';
 import ProductGrid from '@/components/pos/ProductGrid';
 import Cart from '@/components/pos/Cart';
@@ -10,8 +11,9 @@ import { useProducts } from '@/hooks/useProducts';
 import { useCart } from '@/hooks/useCart';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useHeldOrders } from '@/hooks/useHeldOrders';
+import { useDynamicPricing } from '@/hooks/useDynamicPricing';
 import { useAuth } from '@/hooks/useAuth';
-import { useCustomers } from '@/hooks/useCustomers';
+import { useRecommendations } from '@/hooks/useRecommendations';
 
 export default function POSPage() {
     const { user, loading: authLoading } = useAuth();
@@ -21,8 +23,16 @@ export default function POSPage() {
         items, addItem, updateQuantity, removeItem, clearCart, setCartItems,
         subtotal, totalCost, totalProfit, itemCount
     } = useCart();
-    const { createTransaction } = useTransactions(user?.id, user?.role);
+    const { transactions, createTransaction } = useTransactions(user?.id, user?.role);
     const { heldOrders, holdOrder, recallOrder, deleteHeldOrder } = useHeldOrders(user?.id);
+    const { activePromo, calculateTotal } = useDynamicPricing();
+    const { getRecommendations } = useRecommendations(transactions, products);
+
+    // Calculate final total (including promo)
+    const finalTotal = calculateTotal(subtotal);
+
+    // Real-time recommendations based on cart
+    const recommendations = getRecommendations(items, 3);
 
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -154,7 +164,8 @@ export default function POSPage() {
                 paymentMethod,
                 parseFloat(cashReceived),
                 selectedCustomer?.id,
-                pointsRedeemed
+                pointsRedeemed,
+                activePromo
             );
             setLastTransaction(transaction);
             clearCart();
@@ -191,6 +202,56 @@ export default function POSPage() {
                 </header>
 
                 <div className="pos-container">
+
+                    {/* 💡 Intelligent Recommendations */}
+                    {recommendations.length > 0 && (
+                        <div style={{
+                            gridColumn: '1 / -1',
+                            background: 'var(--color-bg-secondary)',
+                            padding: '12px 16px',
+                            borderRadius: '12px',
+                            border: '1px solid var(--color-border)',
+                            marginBottom: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '16px',
+                            overflowX: 'auto'
+                        }}>
+                            <div style={{ minWidth: '120px' }}>
+                                <div className="text-sm font-bold flex items-center gap-xs">
+                                    ✨ Rekomendasi
+                                </div>
+                                <div className="text-xs text-secondary">
+                                    Sering dibeli bersamaan
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                {recommendations.map(rec => (
+                                    <button
+                                        key={rec.id}
+                                        onClick={() => handleProductClick(rec)}
+                                        style={{
+                                            border: '1px solid var(--color-primary)',
+                                            background: 'var(--color-bg-primary)',
+                                            borderRadius: '8px',
+                                            padding: '8px 12px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            minWidth: '140px',
+                                            textAlign: 'left',
+                                            cursor: 'pointer'
+                                        }}
+                                        className="hover:bg-tertiary"
+                                    >
+                                        <div className="text-sm font-bold truncate w-full">{rec.name}</div>
+                                        <div className="text-xs text-primary">{user?.role === 'admin' ? formatCurrency(rec.sell_price) : '+ Add'}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <ProductGrid
                         products={products}
                         categories={categories}
@@ -232,7 +293,7 @@ export default function POSPage() {
             {/* Modals */}
             {showPaymentModal && (
                 <PaymentModal
-                    total={subtotal}
+                    total={finalTotal}
                     customer={selectedCustomer}
                     onConfirm={handlePaymentConfirm}
                     onCancel={() => setShowPaymentModal(false)}

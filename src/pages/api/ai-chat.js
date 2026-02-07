@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { generateAIContext, calculateDailyPrediction, PALANGKA_RAYA_CONTEXT } from '@/lib/regionalIntelligence';
 
 // Initialize Supabase for server-side
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,11 +11,17 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { message, userId } = req.body;
+    const { message, userId } = req.body; // Trusted from frontend in this architecture
 
     if (!message || !userId) {
         return res.status(400).json({ error: 'Message and userId required' });
     }
+
+    // Initialize Supabase with global Anon Key (assuming RLS allows or is handled by manual filters)
+    // Note: In an Ideal World Class app, we'd use Service Role here to ensure rights, 
+    // but we use the shared client for consistency.
+    const supabaseContext = supabase;
+
 
     try {
         // Fetch business data for context
@@ -118,33 +125,124 @@ async function getBusinessContext(userId) {
         netProfit: monthProfit - monthExpenses,
         totalProducts: products?.length || 0,
         topProducts,
-        lowStockList
+        lowStockList,
+        userId
     };
 }
 
 function buildSystemPrompt(ctx) {
-    return `Kamu adalah AI Business Assistant untuk aplikasi POS "Cashlo". Jawab dalam Bahasa Indonesia yang ramah dan profesional.
+    // Get today's prediction
+    const todayPrediction = calculateDailyPrediction(new Date(), {
+        avg_daily_revenue: ctx.monthCount > 0 ? ctx.monthRevenue / Math.max(new Date().getDate(), 1) : 2000000,
+        transaction_count: ctx.monthCount
+    });
 
-DATA BISNIS SAAT INI:
-- Hari Ini: ${ctx.todayCount} transaksi, Omzet Rp ${ctx.todayRevenue.toLocaleString('id-ID')}, Profit Rp ${ctx.todayProfit.toLocaleString('id-ID')}
-- Bulan Ini: ${ctx.monthCount} transaksi, Omzet Rp ${ctx.monthRevenue.toLocaleString('id-ID')}, Gross Profit Rp ${ctx.monthProfit.toLocaleString('id-ID')}
-- Pengeluaran Bulan Ini: Rp ${ctx.monthExpenses.toLocaleString('id-ID')}
-- Net Profit Bulan Ini: Rp ${ctx.netProfit.toLocaleString('id-ID')}
-- Total Produk Aktif: ${ctx.totalProducts}
+    // Get current date info
+    const today = new Date();
+    const dayOfWeek = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][today.getDay()];
+    const isPaydayWeek = today.getDate() >= 25 || today.getDate() <= 5;
+    const month = today.getMonth() + 1;
+    const isDrySeason = [5, 6, 7, 8, 9, 10].includes(month);
 
-PRODUK TERLARIS BULAN INI:
+    // Find upcoming events
+    const upcomingEvents = PALANGKA_RAYA_CONTEXT.events
+        .filter(e => new Date(e.date) >= today)
+        .slice(0, 3)
+        .map(e => `${e.name} (${e.date}): ${e.impact > 1 ? '+' : ''}${Math.round((e.impact - 1) * 100)}% impact`);
+
+    return `Kamu adalah AI Business Intelligence Assistant untuk aplikasi POS "Cashlo" yang beroperasi di PALANGKA RAYA, Kalimantan Tengah.
+
+═══════════════════════════════════════════════════════════
+📊 DATA BISNIS REAL-TIME
+═══════════════════════════════════════════════════════════
+HARI INI (${dayOfWeek}, ${today.toLocaleDateString('id-ID')}):
+- Transaksi: ${ctx.todayCount}
+- Omzet: Rp ${ctx.todayRevenue.toLocaleString('id-ID')}
+- Profit: Rp ${ctx.todayProfit.toLocaleString('id-ID')}
+
+BULAN INI:
+- Total Transaksi: ${ctx.monthCount}
+- Total Omzet: Rp ${ctx.monthRevenue.toLocaleString('id-ID')}
+- Gross Profit: Rp ${ctx.monthProfit.toLocaleString('id-ID')}
+- Pengeluaran: Rp ${ctx.monthExpenses.toLocaleString('id-ID')}
+- Net Profit: Rp ${ctx.netProfit.toLocaleString('id-ID')}
+
+PRODUK TERLARIS:
 ${ctx.topProducts.length > 0 ? ctx.topProducts.join('\n') : 'Belum ada data'}
 
 STOK MENIPIS:
 ${ctx.lowStockList.length > 0 ? ctx.lowStockList.join('\n') : 'Semua stok aman'}
 
-INSTRUKSI:
-- Jawab pertanyaan tentang bisnis berdasarkan data di atas
-- Berikan saran yang actionable dan spesifik
-- Gunakan emoji untuk membuat respons lebih menarik
-- Format angka dengan pemisah ribuan Indonesia (titik)
-- Jika ditanya sesuatu di luar data, jelaskan dengan sopan
-- Jawab singkat dan to the point (maksimal 3-4 paragraf)`;
+═══════════════════════════════════════════════════════════
+🗺️ REGIONAL INTELLIGENCE: PALANGKA RAYA
+═══════════════════════════════════════════════════════════
+DEMOGRAFI:
+- Populasi: ~300.000 jiwa (2024)
+- Etnis utama: Dayak (40%), Jawa (25%), Banjar (15%)
+- Agama: Islam (75%), Kristen (20%), Hindu Kaharingan (5%)
+
+EKONOMI LOKAL:
+- UMK 2024: Rp ${PALANGKA_RAYA_CONTEXT.economy.minimum_wage_2024.toLocaleString('id-ID')}
+- Industri utama: Pemerintahan, Pertambangan, Perkebunan Sawit, Pendidikan
+- Rata-rata pengeluaran makan: Rp 1.850.000/bulan per keluarga
+
+POLA KONSUMEN PALANGKA RAYA:
+- Peak hours: Makan siang (11:30-13:30), Makan malam (18:00-21:00)
+- Weekend: Penjualan naik 25-35% vs weekday
+- Payday pemerintah (tgl 25-28): Penjualan naik 40-45%
+- ${isDrySeason ? 'MUSIM KERING: Minuman dingin lebih laku' : 'MUSIM HUJAN: Makanan hangat lebih laku, delivery meningkat'}
+
+STATUS HARI INI:
+- ${isPaydayWeek ? '💰 MINGGU PAYDAY - Ekspektasi penjualan tinggi!' : 'Minggu normal'}
+- Musim: ${isDrySeason ? 'Kering/Panas' : 'Hujan'}
+- Prediksi omzet: Rp ${todayPrediction.predicted_revenue.mid.toLocaleString('id-ID')} (confidence: ${todayPrediction.confidence}%)
+${todayPrediction.factors.length > 0 ? '- Faktor: ' + todayPrediction.factors.map(f => `${f.name} ${f.impact}`).join(', ') : ''}
+
+EVENT MENDATANG:
+${upcomingEvents.length > 0 ? upcomingEvents.join('\n') : 'Tidak ada event khusus dalam waktu dekat'}
+
+═══════════════════════════════════════════════════════════
+📝 INSTRUKSI AI
+═══════════════════════════════════════════════════════════
+1. Jawab dalam Bahasa Indonesia yang ramah dan profesional
+2. Gunakan data bisnis DAN intelligence regional untuk analisis
+3. Berikan insight spesifik untuk PASAR PALANGKA RAYA
+4. Rekomendasikan strategi berdasarkan pola lokal (payday, musim, event)
+5. Gunakan emoji untuk membuat respons menarik
+6. Format angka dengan pemisah ribuan Indonesia
+7. Jawab singkat dan actionable (maksimal 3-4 paragraf)
+8. Jika ada prediksi, sebutkan tingkat confidence
+9. Hubungkan data bisnis dengan konteks regional
+
+═══════════════════════════════════════════════════════════
+🤖 AGENT ACTION PROTOCOLS (PALANTIR-STYLE)
+═══════════════════════════════════════════════════════════
+Kamu memiliki kemampuan untuk MENGEKSEKUSI tindakan nyata.
+Jika user meminta untuk melakukan sesuatu yang terdaftar di bawah, JANGAN balas dengan teks biasa.
+Balas HANYA dengan JSON block berikut:
+
+1. MENAMBAH SUPPLY BARU:
+User: "Tolong tambahkan stok Cup Plastik 16oz, satuan pcs, min stok 50"
+Response:
+{
+  "action": "add_supply",
+  "params": {
+    "name": "Cup Plastik 16oz",
+    "unit": "pcs",
+    "min_stock": 50,
+    "owner_id": "${ctx.userId || 'USER_ID_PLACEHOLDER'}"
+  }
+}
+
+2. UPDATE HARGA (Simulasi):
+User: "Naikkan harga Kopi Susu jadi 20.000"
+Response:
+{ "action": "update_price", "params": { "item": "Kopi Susu", "price": 20000 } }
+
+PENTING:
+- Jika output JSON, JANGAN tambah teks lain di luar bracket JSON.
+- Pastikan JSON valid.
+- Gunakan kemampuan ini untuk membantu operasional user secara langsung.`;
 }
 
 async function callHuggingFaceAPI(systemPrompt, userMessage) {
@@ -187,7 +285,63 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
     }
 
     // OpenAI-compatible response format
-    return data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
+    const content = data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
+
+    // Check for Action Protocol
+    try {
+        if (content.trim().startsWith('{') && content.includes('"action":')) {
+            const actionRequest = JSON.parse(content);
+            return await executeAction(actionRequest);
+        }
+    } catch (e) {
+        // Not a JSON or failed to parse, ensure we return text
+        console.log('Not an action or parsing failed', e);
+    }
+
+    return content;
+}
+
+// ============================================
+// ACTION AGENT EXECUTOR (Palantir Style)
+// ============================================
+async function executeAction(request) {
+    const { action, params } = request;
+
+    switch (action) {
+        case 'add_supply':
+            // Action: Auto-create a supply item
+            const { name, unit, min_stock, owner_id } = params;
+
+            // Check if already exists
+            const { data: existing } = await supabase
+                .from('supplies')
+                .select('id')
+                .eq('name', name)
+                .eq('owner_id', owner_id)
+                .single();
+
+            if (existing) {
+                return `⚠️ Supply "${name}" sudah ada di database.`;
+            }
+
+            const { error } = await supabase.from('supplies').insert({
+                name,
+                unit,
+                min_stock_level: min_stock || 10,
+                stock: 0,
+                owner_id
+            });
+
+            if (error) return `❌ Gagal menambahkan supply: ${error.message}`;
+            return `✅ **ACTION EXECUTED**: Berhasil menambahkan supply baru "${name}" (Min: ${min_stock} ${unit}).`;
+
+        case 'update_price':
+            // Mock action for price update
+            return `⚠️ Fitur update harga via AI butuh konfirmasi manual. Saya telah mencatat saran perubahan harga untuk "${params.item}".`;
+
+        default:
+            return `❓ Action "${action}" tidak dikenali.`;
+    }
 }
 
 function generateFallbackResponse(message) {

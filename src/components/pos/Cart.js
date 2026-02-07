@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { formatCurrency } from '@/lib/db';
+import { useDynamicPricing } from '@/hooks/useDynamicPricing';
 
 export default function Cart({
     items,
@@ -18,14 +19,20 @@ export default function Cart({
     onSelectCustomer
 }) {
     const [isMobile, setIsMobile] = useState(false);
+    const { activePromo, calculateTotal } = useDynamicPricing();
+
+    // Calculate final total with standard logic + dynamic pricing
+    const finalTotal = activePromo
+        ? subtotal - (subtotal * (activePromo.value / 100))
+        : subtotal;
 
     // ... (keep useEffect) ...
 
     return (
         <div className={`cart-section ${isExpanded ? 'expanded' : ''}`}>
-            {/* Cart Header */}
+            {/* ... (Header) ... */}
             <div className="cart-header" onClick={onToggle}>
-                {/* Customer Selector */}
+                {/* ... (Customer Selector - keep same) ... */}
                 <div style={{ marginTop: '0', marginBottom: '12px' }} onClick={e => e.stopPropagation()}>
                     {selectedCustomer ? (
                         <div
@@ -51,8 +58,15 @@ export default function Cart({
                 </div>
 
                 <div className="flex items-center gap-md" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <h2 className="cart-title" style={{ margin: 0 }}>Pesanan</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                        <div style={{ flex: 1 }}>
+                            <h2 className="cart-title" style={{ margin: 0 }}>Pesanan</h2>
+                            {activePromo && (
+                                <div className="text-xs text-primary animate-pulse font-bold mt-xs">
+                                    {activePromo.name} (-{activePromo.value}%)
+                                </div>
+                            )}
+                        </div>
                         {itemCount > 0 && (
                             <span className="cart-count">{itemCount} item</span>
                         )}
@@ -101,9 +115,15 @@ export default function Cart({
                         <span className="text-secondary">Subtotal</span>
                         <span>{formatCurrency(subtotal)}</span>
                     </div>
+                    {activePromo && (
+                        <div className="cart-total-row text-primary">
+                            <span>Diskon ({activePromo.condition})</span>
+                            <span>-{formatCurrency(subtotal * (activePromo.value / 100))}</span>
+                        </div>
+                    )}
                     <div className="cart-total-row total">
                         <span>Total</span>
-                        <span>{formatCurrency(subtotal)}</span>
+                        <span>{formatCurrency(finalTotal)}</span>
                     </div>
                 </div>
 
@@ -124,10 +144,10 @@ export default function Cart({
                     </button>
                     <button
                         className="btn btn-primary btn-xl btn-pay"
-                        onClick={onPay}
+                        onClick={() => onPay(finalTotal)}
                         disabled={items.length === 0}
                     >
-                        💳 Bayar {items.length > 0 ? formatCurrency(subtotal) : ''}
+                        💳 Bayar {items.length > 0 ? formatCurrency(finalTotal) : ''}
                     </button>
                 </div>
             </div>

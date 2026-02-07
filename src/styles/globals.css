@@ -95,10 +95,23 @@
   --transition-normal: 0.2s ease;
   --transition-slow: 0.3s ease;
 
-  /* Z-index */
-  --z-dropdown: 100;
   --z-modal: 200;
   --z-toast: 300;
+
+  /* ============================================
+     PROVITINA THEME (Premium Intelligence)
+     ============================================ */
+  --provitina-primary: #0F172A;
+  /* Deep Blue */
+  --provitina-accent: #0EA5E9;
+  /* Electric Blue */
+  --provitina-bg: #F8FAFC;
+  /* Clean White/Gray */
+  --provitina-card-bg: #FFFFFF;
+  --provitina-text: #1E293B;
+  --provitina-text-secondary: #64748B;
+  --provitina-border: #E2E8F0;
+  --provitina-gradient: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
 }
 
 /* Base Styles */

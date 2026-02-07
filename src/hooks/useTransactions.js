@@ -31,7 +31,7 @@ export function useTransactions(userId, userRole) {
         }
     }
 
-    async function createTransaction(cartItems, paymentMethod = 'cash', cashReceived = 0, customerId = null, pointsRedeemed = 0, rewardId = null) {
+    async function createTransaction(cartItems, paymentMethod = 'cash', cashReceived = 0, customerId = null, pointsRedeemed = 0, discount = null) {
         const id = generateTransactionId();
         const now = new Date().toISOString();
 
@@ -47,24 +47,33 @@ export function useTransactions(userId, userRole) {
             profit: (item.sell_price - item.cost_price) * item.qty
         }));
 
-        const subtotal = items.reduce((sum, item) => sum + item.total_sell, 0);
+        const rawSubtotal = items.reduce((sum, item) => sum + item.total_sell, 0);
         const totalCost = items.reduce((sum, item) => sum + item.total_cost, 0);
-        const totalProfit = (subtotal - pointsRedeemed) - totalCost;
+
+        // Apply Discount
+        let discountAmount = 0;
+        if (discount) {
+            discountAmount = rawSubtotal * (discount.value / 100);
+        }
+
+        const finalSubtotal = rawSubtotal - discountAmount;
+        const totalProfit = (finalSubtotal - pointsRedeemed) - totalCost;
 
         const transaction = {
             id,
             datetime: now,
-            user_id: userId, // Owner of this transaction
+            user_id: userId,
             customer_id: customerId,
             items: JSON.stringify(items),
-            subtotal,
+            subtotal: finalSubtotal, // Store the discounted total
             total_cost: totalCost,
             total_profit: totalProfit,
             payment_method: paymentMethod,
             cash_received: cashReceived,
-            change: cashReceived - (subtotal - pointsRedeemed),
+            change: cashReceived - (finalSubtotal - pointsRedeemed),
             points_redeemed: pointsRedeemed,
             points_earned: Math.floor(items.reduce((sum, item) => sum + item.qty, 0)),
+            discount_info: discount ? JSON.stringify(discount) : null, // Store discount metadata if possible, otherwise ignored
             status: 'completed',
             created_at: now
         };
@@ -184,6 +193,30 @@ export function useTransactions(userId, userRole) {
         await loadTransactions();
     }
 
+    async function deleteTransaction(transactionId) {
+        if (!confirm('Apakah Anda yakin ingin menghapus transaksi ini secara permanen? Data tidak dapat dikembalikan.')) {
+            return false;
+        }
+
+        try {
+            const { error } = await supabase
+                .from('transactions')
+                .delete()
+                .eq('id', transactionId);
+
+            if (error) {
+                console.error('Error deleting transaction:', error);
+                throw error;
+            }
+
+            await loadTransactions();
+            return true;
+        } catch (error) {
+            console.error('Failed to delete transaction:', error);
+            return false;
+        }
+    }
+
     function getTransactionsByDateRange(startDate, endDate) {
         return transactions.filter(txn => {
             if (txn.status === 'voided') return false;
@@ -233,6 +266,7 @@ export function useTransactions(userId, userRole) {
         loading,
         createTransaction,
         voidTransaction,
+        deleteTransaction,
         createManualTransaction,
         getTransactionsByDateRange,
         getTodayStats,

@@ -9,7 +9,7 @@ import { formatCurrency, formatDate, formatNumberInput, parseNumberInput } from 
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction } = useTransactions(user?.id, user?.role);
+    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction, deleteTransaction } = useTransactions(user?.id, user?.role);
     const { products } = useProducts(user?.id, user?.role);
     const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses(user?.id);
     const { supplies } = usePurchasing(user?.id, user?.role);
@@ -435,6 +435,7 @@ export default function ReportsPage() {
                                         <th className="hide-mobile" style={{ textAlign: 'right' }}>HPP</th>
                                         <th style={{ textAlign: 'right' }}>Profit</th>
                                         <th className="hide-mobile">Metode</th>
+                                        <th style={{ textAlign: 'center' }}>Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -463,12 +464,22 @@ export default function ReportsPage() {
                                                         {txn.payment_method === 'cash' ? 'Tunai' : 'QRIS'}
                                                     </span>
                                                 </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <button
+                                                        className="btn btn-ghost btn-xs"
+                                                        style={{ color: 'var(--color-error)' }}
+                                                        onClick={() => deleteTransaction(txn.id)}
+                                                        title="Hapus transaksi"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </td>
                                             </tr>
                                         );
                                     })}
                                     {filteredTxns.length === 0 && (
                                         <tr>
-                                            <td colSpan="7" style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
+                                            <td colSpan="8" style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
                                                 Tidak ada transaksi dalam periode ini
                                             </td>
                                         </tr>

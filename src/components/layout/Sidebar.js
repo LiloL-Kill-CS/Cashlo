@@ -123,6 +123,34 @@ export default function Sidebar({ activePage }) {
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                     </svg>
                 </a>
+                <a
+                    href="/provitina"
+                    className={`sidebar-link ${activePage === 'provitina' ? 'active' : ''}`}
+                    title="Provitina Intelligence"
+                    style={{ color: activePage === 'provitina' ? '#0EA5E9' : '' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </a>
+
+                <a
+                    href="/command"
+                    className={`sidebar-link ${activePage === 'command' ? 'active' : ''}`}
+                    title="Command Center (Palantir-style)"
+                    style={{
+                        color: activePage === 'command' ? '#8b5cf6' : '',
+                        background: activePage === 'command' ? 'linear-gradient(135deg, #3b82f620, #8b5cf620)' : ''
+                    }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9"></path>
+                        <path d="M12 7v10"></path>
+                    </svg>
+                </a>
+
             </nav>
 
             <a
@@ -141,6 +169,6 @@ export default function Sidebar({ activePage }) {
                     <line x1="21" y1="12" x2="9" y2="12"></line>
                 </svg>
             </a>
-        </aside>
+        </aside >
     );
 }

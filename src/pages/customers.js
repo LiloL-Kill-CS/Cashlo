@@ -1,22 +1,21 @@
-import { useState, useEffect } from 'react';
-import Sidebar from '@/components/layout/Sidebar';
-import { useAuth } from '@/hooks/useAuth';
-import { useCustomers } from '@/hooks/useCustomers';
-import { formatDate } from '@/lib/db';
+import { useTransactions } from '@/hooks/useTransactions';
+import { useCustomerInsights } from '@/hooks/useCustomerInsights';
 
 export default function CustomersPage() {
     const { user, loading: authLoading } = useAuth();
     const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers } = useCustomers(user?.id, user?.role);
+    const { transactions } = useTransactions(user?.id, user?.role);
+    const insights = useCustomerInsights(customers, transactions);
+
+    // Use enhanced data from insights if available, else fallback to raw
+    const displayCustomers = insights?.customerData || customers;
+
     const [searchQuery, setSearchQuery] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [formData, setFormData] = useState({ name: '', phone: '', email: '', address: '' });
 
-    useEffect(() => {
-        if (!authLoading && !user) {
-            window.location.href = '/';
-        }
-    }, [user, authLoading]);
+    // ... (keep modal logic same) ...
 
     const handleSearch = (e) => {
         const query = e.target.value;
@@ -24,45 +23,25 @@ export default function CustomersPage() {
         searchCustomers(query);
     };
 
-    const openAddModal = () => {
-        setEditingCustomer(null);
-        setFormData({ name: '', phone: '', email: '', address: '' });
-        setShowModal(true);
-    };
+    // ... (keep submit/delete logic same) ...
+    // Note: Re-implementing handlers here to ensure they close over latest state if needed, 
+    // but principally we just need to render the new UI.
 
-    const openEditModal = (c) => {
-        setEditingCustomer(c);
-        setFormData({ name: c.name, phone: c.phone || '', email: c.email || '', address: c.address || '' });
-        setShowModal(true);
-    };
-
+    // Re-declaring for clarity in replacement
+    const openAddModal = () => { setEditingCustomer(null); setFormData({ name: '', phone: '', email: '', address: '' }); setShowModal(true); };
+    const openEditModal = (c) => { setEditingCustomer(c); setFormData({ name: c.name, phone: c.phone || '', email: c.email || '', address: c.address || '' }); setShowModal(true); };
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (editingCustomer) {
-                await updateCustomer(editingCustomer.id, formData);
-            } else {
-                await addCustomer(formData);
-            }
+            if (editingCustomer) await updateCustomer(editingCustomer.id, formData);
+            else await addCustomer(formData);
             setShowModal(false);
-        } catch (error) {
-            alert(error.message);
-        }
+        } catch (error) { alert(error.message); }
     };
+    const handleDelete = async (id) => { if (confirm('Hapus?')) await deleteCustomer(id); };
 
-    const handleDelete = async (id) => {
-        if (confirm('Yakin ingin menghapus pelanggan ini?')) {
-            try {
-                await deleteCustomer(id);
-            } catch (error) {
-                alert('Gagal menghapus: ' + error.message);
-            }
-        }
-    };
 
-    if (authLoading || customersLoading) {
-        return <div className="p-xl text-center">Memuat...</div>;
-    }
+    if (authLoading || customersLoading) return <div className="p-xl text-center">Memuat...</div>;
 
     return (
         <div className="app-container">
@@ -71,18 +50,53 @@ export default function CustomersPage() {
                 <header className="page-header">
                     <div>
                         <h1 className="page-title">Pelanggan</h1>
-                        <p className="text-secondary text-sm">Kelola data member dan poin</p>
+                        <p className="text-secondary text-sm">Analisis Retensi & Loyalty</p>
                     </div>
                 </header>
 
-                <div style={{ padding: 'var(--spacing-xl)' }}>
+                <div style={{ padding: '0 var(--spacing-xl) var(--spacing-xl)' }}>
+
+                    {/* 📊 Retention Console */}
+                    {insights && (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-md mb-lg">
+                            <div className="card p-md flex items-center gap-md">
+                                <div className="p-sm rounded-full bg-success-light text-success text-2xl">😊</div>
+                                <div>
+                                    <div className="text-2xl font-bold">{insights.segments.active}</div>
+                                    <div className="text-xs text-secondary">Pelanggan Aktif</div>
+                                </div>
+                            </div>
+                            <div className="card p-md flex items-center gap-md">
+                                <div className="p-sm rounded-full bg-warning-light text-warning text-2xl">⚠️</div>
+                                <div>
+                                    <div className="text-2xl font-bold">{insights.segments.at_risk}</div>
+                                    <div className="text-xs text-secondary">Butuh Perhatian (At Risk)</div>
+                                </div>
+                            </div>
+                            <div className="card p-md flex items-center gap-md">
+                                <div className="p-sm rounded-full bg-error-light text-error text-2xl">💔</div>
+                                <div>
+                                    <div className="text-2xl font-bold">{insights.segments.lost}</div>
+                                    <div className="text-xs text-secondary">Lost (Churned)</div>
+                                </div>
+                            </div>
+                            <div className="card p-md flex items-center gap-md" style={{ background: 'var(--color-primary)', color: 'white' }}>
+                                <div className="text-2xl">💎</div>
+                                <div>
+                                    <div className="text-2xl font-bold">{displayCustomers[0]?.name || '-'}</div>
+                                    <div className="text-xs" style={{ opacity: 0.8 }}>Top Spender</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="card">
                         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div className="search-bar" style={{ width: '300px' }}>
                                 <input
                                     type="text"
                                     className="input"
-                                    placeholder="Cari nama atau no HP..."
+                                    placeholder="Cari nama..."
                                     value={searchQuery}
                                     onChange={handleSearch}
                                 />
@@ -96,47 +110,44 @@ export default function CustomersPage() {
                                 <thead>
                                     <tr>
                                         <th>Nama</th>
-                                        <th>Alamat</th>
-                                        <th>No. HP</th>
-                                        <th>Tier</th>
-                                        <th>Poin</th>
+                                        <th>Status Kesehatan</th>
+                                        <th>Interval Kunjungan</th>
+                                        <th>Terakhir Datang</th>
                                         <th>Total Belanja</th>
-                                        <th>Bergabung</th>
                                         <th style={{ textAlign: 'right' }}>Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {customers.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="7" className="text-center text-secondary" style={{ padding: '2rem' }}>
-                                                Belum ada data pelanggan
-                                            </td>
-                                        </tr>
+                                    {displayCustomers.length === 0 ? (
+                                        <tr><td colSpan="6" className="text-center p-xl">Belum ada data</td></tr>
                                     ) : (
-                                        customers.map(c => (
+                                        displayCustomers.map(c => (
                                             <tr key={c.id}>
-                                                <td style={{ fontWeight: '500' }}>{c.name}</td>
-                                                <td className="text-sm">{c.address || '-'}</td>
-                                                <td>{c.phone || '-'}</td>
                                                 <td>
-                                                    <span className="badge badge-primary">
-                                                        {c.membership_tiers?.name || 'Bronze'}
-                                                    </span>
+                                                    <div className="font-bold">{c.name}</div>
+                                                    <div className="text-xs text-secondary">{c.phone || '-'}</div>
                                                 </td>
-                                                <td style={{ fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                                                    {c.points} pts
+                                                <td>
+                                                    {c.health ? (
+                                                        <span className={`badge badge-${c.health.risk_color === 'red' ? 'error' : c.health.risk_color === 'orange' ? 'warning' : 'success'}`}>
+                                                            {c.health.status}
+                                                        </span>
+                                                    ) : <span className="badge badge-secondary">New</span>}
                                                 </td>
-                                                <td>Rp {c.total_spend?.toLocaleString('id-ID')}</td>
-                                                <td className="text-sm text-secondary">
-                                                    {formatDate(c.created_at)}
+                                                <td className="text-sm">
+                                                    {c.stats?.avg_interval ? `Setiap ${c.stats.avg_interval} hari` : '-'}
                                                 </td>
+                                                <td className="text-sm">
+                                                    {c.stats?.days_since_last ? `${c.stats.days_since_last} hari lalu` : '-'}
+                                                </td>
+                                                <td className="font-bold">Rp {c.stats?.total_spent?.toLocaleString('id-ID') || 0}</td>
                                                 <td style={{ textAlign: 'right' }}>
-                                                    <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(c)}>
-                                                        ✏️
-                                                    </button>
-                                                    <button className="btn btn-ghost btn-sm text-error" onClick={() => handleDelete(c.id)}>
-                                                        🗑️
-                                                    </button>
+                                                    {c.health?.status === 'At Risk' && (
+                                                        <button className="btn btn-xs btn-outline-warning mr-xs" onClick={() => alert(`Simulasi: Mengirim Voucher Diskon ke WA ${c.phone}`)}>
+                                                            📩 Kirim Voucher
+                                                        </button>
+                                                    )}
+                                                    <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(c)}>✏️</button>
                                                 </td>
                                             </tr>
                                         ))

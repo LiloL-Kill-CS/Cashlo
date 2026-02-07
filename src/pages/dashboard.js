@@ -14,6 +14,8 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import Sidebar from '@/components/layout/Sidebar';
+import RegionalInsightsWidget from '@/components/RegionalInsights';
+import BusinessSimulator from '@/components/BusinessSimulator';
 import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useInventory } from '@/hooks/useInventory';
@@ -347,7 +349,23 @@ export default function DashboardPage() {
                                 <p className="text-xl font-bold">{stats.count}</p>
                             </div>
                         </div>
-                    </div>{/* Charts Row */}
+                    </div>
+
+                    {/* 🗺️ Regional Intelligence */}
+                    <div style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <RegionalInsightsWidget />
+                    </div>
+
+                    {/* 🔮 Business Simulator (What-If) */}
+                    <div style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <BusinessSimulator
+                            currentRevenue={stats.revenue}
+                            currentProfit={stats.profit}
+                            currentExpenses={stats.expenses}
+                        />
+                    </div>
+
+                    {/* Charts Row */}
                     <div className="charts-grid" style={{
                         display: 'grid',
                         gridTemplateColumns: '2fr 1fr',
