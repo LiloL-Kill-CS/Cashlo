@@ -27,8 +27,8 @@ export default function CommandCenterPage() {
     // Calculate quick stats
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthTxns = transactions.filter(t => new Date(t.datetime) >= startOfMonth);
-    const monthExpenses = expenses.filter(e => new Date(e.date) >= startOfMonth);
+    const monthTxns = (transactions || []).filter(t => new Date(t.datetime) >= startOfMonth);
+    const monthExpenses = (expenses || []).filter(e => new Date(e.date) >= startOfMonth);
 
     const stats = {
         revenue: monthTxns.reduce((sum, t) => sum + t.subtotal, 0),

@@ -14,6 +14,7 @@ import { useHeldOrders } from '@/hooks/useHeldOrders';
 import { useDynamicPricing } from '@/hooks/useDynamicPricing';
 import { useAuth } from '@/hooks/useAuth';
 import { useRecommendations } from '@/hooks/useRecommendations';
+import { useCustomers } from '@/hooks/useCustomers';
 
 export default function POSPage() {
     const { user, loading: authLoading } = useAuth();

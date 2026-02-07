@@ -1,3 +1,7 @@
+import { useState, useEffect } from 'react';
+import Sidebar from '@/components/layout/Sidebar';
+import { useAuth } from '@/hooks/useAuth';
+import { useCustomers } from '@/hooks/useCustomers';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCustomerInsights } from '@/hooks/useCustomerInsights';
 
