@@ -1,11 +1,8 @@
-const CACHE_NAME = 'cashlo-v1';
+const CACHE_NAME = 'cashlo-v2';
 const OFFLINE_URL = '/offline';
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [
-    '/',
-    '/pos',
-    '/dashboard',
     '/offline',
     '/manifest.json'
 ];
@@ -41,6 +38,9 @@ self.addEventListener('fetch', (event) => {
 
     // Skip API requests (don't cache)
     if (event.request.url.includes('/api/')) return;
+
+    // Skip _next/static chunks - these change with every build
+    if (event.request.url.includes('/_next/')) return;
 
     event.respondWith(
         fetch(event.request)
