@@ -17,14 +17,25 @@ export function AuthProvider({ children }) {
     }, []);
 
     const login = async (username, password) => {
-        const { data: users, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('username', username);
+        let users, error;
+        try {
+            const result = await supabase
+                .from('users')
+                .select('*')
+                .eq('username', username);
+            users = result.data;
+            error = result.error;
+        } catch (networkErr) {
+            console.error('Network error during login:', networkErr);
+            throw new Error('Server database tidak bisa dihubungi. Cek koneksi internet atau Supabase project mungkin sedang paused. Buka dashboard.supabase.com untuk mengaktifkan kembali.');
+        }
 
         if (error) {
             console.error('Login error:', error);
-            throw new Error('Terjadi kesalahan saat login');
+            if (error.message?.includes('fetch failed') || error.message?.includes('ENOTFOUND')) {
+                throw new Error('Server database tidak bisa dihubungi. Supabase project mungkin sedang paused. Buka dashboard.supabase.com untuk mengaktifkan kembali.');
+            }
+            throw new Error('Terjadi kesalahan saat login: ' + error.message);
         }
 
         if (!users || users.length === 0) {
