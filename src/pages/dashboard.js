@@ -113,7 +113,7 @@ export default function DashboardPage() {
         const cashTxns = periodTxns.filter(t => t.payment_method === 'cash');
         const qrTxns = periodTxns.filter(t => t.payment_method === 'qr');
 
-        const revenueCash = cashTxns.reduce((sum, t => sum + t.subtotal, 0);
+        const revenueCash = cashTxns.reduce((sum, t) => sum + t.subtotal, 0);
         const revenueQr = qrTxns.reduce((sum, t) => sum + t.subtotal, 0);
 
         const profitCash = cashTxns.reduce((sum, t) => sum + t.total_profit, 0);
