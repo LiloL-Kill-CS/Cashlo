@@ -525,13 +525,12 @@ export default function ReportsPage() {
                             <h3>Input Data Transaksi Lama</h3>
                             <button className="btn btn-ghost btn-icon" onClick={() => setShowManualModal(false)}>✕</button>
                         </div>
-                        <form onSubmit={handleManualSubmit}>
-                            <div className="modal-body" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                        <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 80px)' }}>
+                            <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
                                 <div className="alert alert-info mb-md" style={{ fontSize: '13px', background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '10px', borderRadius: '6px' }}>
                                     ℹ️ Pilih beberapa produk sekaligus untuk 1 transaksi. Stok tidak akan berkurang.
                                 </div>
-
-                                {/* Date & Notes Row */}
+                                
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                                     <div>
                                         <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>Tanggal & Waktu *</label>
