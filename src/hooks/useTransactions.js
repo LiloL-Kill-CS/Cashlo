@@ -73,7 +73,6 @@ export function useTransactions(userId, userRole) {
             change: cashReceived - (finalSubtotal - pointsRedeemed),
             points_redeemed: pointsRedeemed,
             points_earned: Math.floor(items.reduce((sum, item) => sum + item.qty, 0)),
-            discount_info: discount ? JSON.stringify(discount) : null, // Store discount metadata if possible, otherwise ignored
             status: 'completed',
             created_at: now
         };
