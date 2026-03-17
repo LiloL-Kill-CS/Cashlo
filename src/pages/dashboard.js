@@ -38,14 +38,14 @@ ChartJS.register(
 
 export default function DashboardPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTransactionsByDateRange, getTopProducts, getTodayStats } = useTransactions(user?.id, user?.role);
-    const { getExpensesByDateRange } = useExpenses(user?.id);
+    const { transactions, loading: txnLoading, getTransactionsByDateRange, getTopProducts, getTodayStats } = useTransactions(user?.owner_id, user?.role, user?.id);
+    const { getExpensesByDateRange } = useExpenses(user?.owner_id);
     const [period, setPeriod] = useState('today');
     const [stats, setStats] = useState({ 
         revenue: 0, profit: 0, count: 0, expenses: 0, netProfit: 0,
-        revenueCash: 0, revenueQris: 0,
-        profitCash: 0, profitQris: 0,
-        netProfitCash: 0, netProfitQris: 0
+        revenueCash: 0, revenueQr: 0,
+        profitCash: 0, profitQr: 0,
+        netCash: 0, netQr: 0
     });
     const [topProducts, setTopProducts] = useState([]);
     const [chartData, setChartData] = useState({ labels: [], revenue: [], profit: [] });
@@ -109,22 +109,22 @@ export default function DashboardPage() {
         const totalExpenses = periodExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
         const totalNetProfit = totalGrossProfit - totalExpenses;
 
-        // Calculate Cash vs QRIS splits
+        // Calculate Cash vs QR splits
         const cashTxns = periodTxns.filter(t => t.payment_method === 'cash');
-        const qrisTxns = periodTxns.filter(t => t.payment_method === 'qris');
+        const qrTxns = periodTxns.filter(t => t.payment_method === 'qr');
 
-        const revenueCash = cashTxns.reduce((sum, t) => sum + t.subtotal, 0);
-        const revenueQris = qrisTxns.reduce((sum, t) => sum + t.subtotal, 0);
+        const revenueCash = cashTxns.reduce((sum, t => sum + t.subtotal, 0);
+        const revenueQr = qrTxns.reduce((sum, t) => sum + t.subtotal, 0);
 
         const profitCash = cashTxns.reduce((sum, t) => sum + t.total_profit, 0);
-        const profitQris = qrisTxns.reduce((sum, t) => sum + t.total_profit, 0);
+        const profitQr = qrTxns.reduce((sum, t) => sum + t.total_profit, 0);
 
         // Proportionally split expenses based on revenue to calculate Net Profit per payment type
         const cashRatio = totalRevenue > 0 ? revenueCash / totalRevenue : 0;
-        const qrisRatio = totalRevenue > 0 ? revenueQris / totalRevenue : 0;
+        const qrRatio = totalRevenue > 0 ? revenueQr / totalRevenue : 0;
         
-        const netProfitCash = profitCash - (totalExpenses * cashRatio);
-        const netProfitQris = profitQris - (totalExpenses * qrisRatio);
+        const netCash = profitCash - (totalExpenses * cashRatio);
+        const netQr = profitQr - (totalExpenses * qrRatio);
 
         setStats({
             revenue: totalRevenue,
@@ -133,11 +133,11 @@ export default function DashboardPage() {
             netProfit: totalNetProfit,
             count: periodTxns.reduce((sum, t) => sum + (t.manual_txn_count || 1), 0),
             revenueCash,
-            revenueQris,
+            revenueQr,
             profitCash,
-            profitQris,
-            netProfitCash,
-            netProfitQris
+            profitQr,
+            netCash,
+            netQr
         });
 
         setTopProducts(getTopProducts(startDate, endDate, 5));
@@ -354,7 +354,7 @@ export default function DashboardPage() {
                                 <p className="text-xl font-bold">{formatCurrency(stats.revenue)}</p>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px' }}>
                                     <span style={{ color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cash: {formatCurrency(stats.revenueCash)}</span>
-                                    <span style={{ color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {formatCurrency(stats.revenueQris)}</span>
+                                    <span style={{ color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QR: {formatCurrency(stats.revenueQr)}</span>
                                 </div>
                             </div>
                         </div>

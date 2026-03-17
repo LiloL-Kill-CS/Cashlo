@@ -62,12 +62,14 @@ export default function SettingsPage() {
             const { error } = await supabase.from('users').update(updates).eq('id', editingUser.id);
             if (error) console.error('Error updating user:', error);
         } else {
+            const newId = `user-${Date.now()}`;
             const userData = {
-                id: `user-${Date.now()}`,
+                id: newId,
                 name: formData.name,
                 username: formData.username,
                 password_hash: formData.password, // In production, hash this
                 role: formData.role,
+                owner_id: user.id, // Assign the kasir to the current admin
                 is_active: true,
                 created_at: new Date().toISOString()
             };

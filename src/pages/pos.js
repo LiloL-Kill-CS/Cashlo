@@ -18,14 +18,14 @@ import { useCustomers } from '@/hooks/useCustomers';
 
 export default function POSPage() {
     const { user, loading: authLoading } = useAuth();
-    const { products, categories, loading: productsLoading } = useProducts(user?.id, user?.role);
-    const { customers, searchCustomers } = useCustomers(user?.id, user?.role);
+    const { products, categories, loading: productsLoading } = useProducts(user?.owner_id, user?.role);
+    const { customers, searchCustomers } = useCustomers(user?.owner_id, user?.role);
     const {
         items, addItem, updateQuantity, removeItem, clearCart, setCartItems,
         subtotal, totalCost, totalProfit, itemCount
     } = useCart();
-    const { transactions, createTransaction } = useTransactions(user?.id, user?.role);
-    const { heldOrders, holdOrder, recallOrder, deleteHeldOrder } = useHeldOrders(user?.id);
+    const { transactions, createTransaction } = useTransactions(user?.owner_id, user?.role, user?.id);
+    const { heldOrders, holdOrder, recallOrder, deleteHeldOrder } = useHeldOrders(user?.owner_id);
     const { activePromo, calculateTotal } = useDynamicPricing();
     const { getRecommendations } = useRecommendations(transactions, products);
 

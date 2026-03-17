@@ -13,7 +13,7 @@ export default function InventoryPage() {
         addWarehouse, updateWarehouse, updateStock, deleteStock, deleteWarehouse, loadStocks
     } = useInventory(user?.id, user?.role);
 
-    const { deleteProduct, reload: reloadProducts } = useProducts(user?.id, user?.role);
+    const { deleteProduct, reload: reloadProducts } = useProducts(user?.owner_id, user?.role);
 
     const [activeTab, setActiveTab] = useState('stock'); // stock, logs, warehouses
     const [searchTerm, setSearchTerm] = useState('');

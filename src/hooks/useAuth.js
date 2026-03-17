@@ -61,11 +61,15 @@ export function AuthProvider({ children }) {
             throw new Error('Password salah');
         }
 
+        // Backward compatibility: If no owner_id, use own id
+        const owner_id = foundUser.owner_id || foundUser.id;
+
         const userData = {
             id: foundUser.id,
             name: foundUser.name,
             username: foundUser.username,
-            role: foundUser.role
+            role: foundUser.role,
+            owner_id: owner_id
         };
 
         setUser(userData);
@@ -73,7 +77,7 @@ export function AuthProvider({ children }) {
         return userData;
     };
 
-    const register = async (username, password, name, role = 'kasir') => {
+    const register = async (username, password, name, role = 'kasir', owner_id = null) => {
         // Check if username exists
         const { data: existing } = await supabase
             .from('users')
@@ -84,15 +88,20 @@ export function AuthProvider({ children }) {
             throw new Error('Username sudah digunakan');
         }
 
+        const newId = `user-${Date.now()}`;
+        // If no owner_id provided, default to self
+        const finalOwnerId = owner_id || newId;
+
         // Create new user
         const { data, error } = await supabase
             .from('users')
             .insert([{
-                id: `user-${Date.now()}`,
+                id: newId,
                 username,
                 password_hash: password, // In production, hash this
                 name,
                 role,
+                owner_id: finalOwnerId,
                 is_active: true,
                 created_at: new Date().toISOString()
             }])

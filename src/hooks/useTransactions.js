@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { generateTransactionId } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
-export function useTransactions(userId, userRole) {
+export function useTransactions(userId, userRole, actualUserId) {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // If actualUserId is not provided (e.g., from an older call), we fallback to userId
+    const currentUserId = actualUserId || userId;
 
     useEffect(() => {
         if (userId) {
@@ -14,10 +17,20 @@ export function useTransactions(userId, userRole) {
 
     async function loadTransactions() {
         try {
+            // We want to fetch transactions belonging to the business owner
+            // This means any transaction where the user_id's owner_id is the current userId
+            // Wait, the easiest way is to add business_id or owner_id to transactions.
+            // Since we haven't, we need to query transactions where user_id IN (admin, kasir1, kasir2)
+            // Let's first get all user IDs that belong to this owner
+            const { data: users } = await supabase.from('users').select('id').eq('owner_id', userId);
+            const userIds = users ? users.map(u => u.id) : [userId];
+            // Also include the owner themselves just in case
+            if (!userIds.includes(userId)) userIds.push(userId);
+
             let query = supabase
                 .from('transactions')
                 .select('*')
-                .eq('user_id', userId) // Always filter by owner
+                .in('user_id', userIds)
                 .order('datetime', { ascending: false });
 
             const { data: txns, error } = await query;
@@ -62,17 +75,15 @@ export function useTransactions(userId, userRole) {
         const transaction = {
             id,
             datetime: now,
-            user_id: userId,
+            user_id: currentUserId, // Log the actual user who made the transaction
             customer_id: customerId,
             items: JSON.stringify(items),
-            subtotal: finalSubtotal, // Store the discounted total
+            subtotal: finalSubtotal,
             total_cost: totalCost,
             total_profit: totalProfit,
             payment_method: paymentMethod,
             cash_received: cashReceived,
-            change: cashReceived - (finalSubtotal - pointsRedeemed),
-            points_redeemed: pointsRedeemed,
-            points_earned: Math.floor(items.reduce((sum, item) => sum + item.qty, 0)),
+            change: cashReceived - finalSubtotal,
             status: 'completed',
             created_at: now
         };
@@ -117,8 +128,7 @@ export function useTransactions(userId, userRole) {
                         change_amount: -item.qty,
                         final_stock: newQty,
                         type: 'sale',
-                        reference_id: id,
-                        created_by: userId,
+                        created_by: currentUserId,
                         notes: `Penjualan Kasir: ${id}`
                     }]);
                 }
@@ -127,14 +137,16 @@ export function useTransactions(userId, userRole) {
             console.error('Error updating inventory:', invError);
         }
 
-        // --- UPDATE CUSTOMER POINTS ---
+        // --- UPDATE CUSTOMER POINTS (Skipped if columns missing) ---
+        /*
         if (customerId) {
             const { data: customer } = await supabase.from('customers').select('points').eq('id', customerId).single();
             if (customer) {
-                const newPoints = (customer.points || 0) - pointsRedeemed + transaction.points_earned;
+                const newPoints = (customer.points || 0) + 1; // Simplified logic
                 await supabase.from('customers').update({ points: newPoints }).eq('id', customerId);
             }
         }
+        */
 
         await loadTransactions();
         return transaction;
@@ -159,17 +171,15 @@ export function useTransactions(userId, userRole) {
         const transaction = {
             id,
             datetime: datetime || new Date().toISOString(),
-            user_id: userId,
+            user_id: currentUserId, // Log the actual user who made the manual transaction
             customer_id: null,
             items: JSON.stringify(items),
             subtotal: total_sell,
             total_cost: total_cost,
             total_profit: total_sell - total_cost,
-            payment_method: data.payment_method || 'cash',
+            payment_method: data.payment_method || 'qr',
             cash_received: total_sell,
             change: 0,
-            points_redeemed: 0,
-            points_earned: 0,
             status: 'completed',
             manual_txn_count: count || 1, // Store the bulk count
             created_at: new Date().toISOString()

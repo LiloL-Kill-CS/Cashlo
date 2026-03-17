@@ -36,7 +36,7 @@ export default function PaymentModal({
 
     const cash = parseInt(cashReceived) || 0;
     const change = cash - finalTotal;
-    const canPay = paymentMethod === 'qris' || cash >= finalTotal;
+    const canPay = paymentMethod === 'qr' || cash >= finalTotal;
 
     // Filter applicable rewards
     const availableRewards = customer ? rewards.filter(r => r.points_cost <= customer.points && r.reward_type === 'discount_amount') : [];
@@ -147,8 +147,8 @@ export default function PaymentModal({
                                 💵 Tunai
                             </button>
                             <button
-                                className={`btn ${paymentMethod === 'qris' ? 'btn-primary' : 'btn-secondary'}`}
-                                onClick={() => setPaymentMethod('qris')}
+                                className={`btn ${paymentMethod === 'qr' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setPaymentMethod('qr')}
                                 style={{ flex: 1 }}
                             >
                                 📱 QRIS
@@ -223,7 +223,7 @@ export default function PaymentModal({
                         </>
                     )}
 
-                    {paymentMethod === 'qris' && (
+                    {paymentMethod === 'qr' && (
                         <div style={{
                             textAlign: 'center',
                             padding: 'var(--spacing-xl)',

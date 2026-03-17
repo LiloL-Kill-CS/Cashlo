@@ -9,10 +9,10 @@ import { formatCurrency, formatDate, formatNumberInput, parseNumberInput } from 
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction, deleteTransaction } = useTransactions(user?.id, user?.role);
-    const { products } = useProducts(user?.id, user?.role);
-    const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses(user?.id);
-    const { supplies } = usePurchasing(user?.id, user?.role);
+    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction, deleteTransaction } = useTransactions(user?.owner_id, user?.role, user?.id);
+    const { products } = useProducts(user?.owner_id, user?.role);
+    const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses(user?.owner_id);
+    const { supplies } = usePurchasing(user?.owner_id, user?.role);
 
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
@@ -27,7 +27,7 @@ export default function ReportsPage() {
     const [showManualModal, setShowManualModal] = useState(false);
     const [showExpenseModal, setShowExpenseModal] = useState(false);
     const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
-    const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'cash', cartItems: [] });
+    const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [] });
 
     // Redirect kasir away from reports
     useEffect(() => {
@@ -353,7 +353,7 @@ export default function ReportsPage() {
                                     >
                                         <option value="all">Semua</option>
                                         <option value="cash">Tunai</option>
-                                        <option value="qris">QRIS</option>
+                                        <option value="qr">QRIS</option>
                                     </select>
                                 </div>
                                 <div className="period-filter" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>

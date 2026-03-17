@@ -10,7 +10,7 @@ export default function HRPage() {
     const {
         shifts, attendanceHistory, currentSession, loading: hrLoading,
         clockIn, clockOut, createShift, deleteShift
-    } = useHR(user?.id);
+    } = useHR(user?.owner_id);
 
     const [activeTab, setActiveTab] = useState('attendance'); // attendance, shifts, report
     const [clockNote, setClockNote] = useState('');
