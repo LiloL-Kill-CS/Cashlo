@@ -166,7 +166,7 @@ export function useTransactions(userId, userRole) {
             subtotal: total_sell,
             total_cost: total_cost,
             total_profit: total_sell - total_cost,
-            payment_method: 'cash',
+            payment_method: data.payment_method || 'cash',
             cash_received: total_sell,
             change: 0,
             points_redeemed: 0,

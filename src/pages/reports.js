@@ -20,13 +20,14 @@ export default function ReportsPage() {
         return d.toISOString().split('T')[0];
     });
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [paymentFilter, setPaymentFilter] = useState('all');
     const [filteredTxns, setFilteredTxns] = useState([]);
     const [expenses, setExpenses] = useState([]);
     const [stats, setStats] = useState({ revenue: 0, grossProfit: 0, cost: 0, count: 0, expenses: 0, netProfit: 0 });
     const [showManualModal, setShowManualModal] = useState(false);
     const [showExpenseModal, setShowExpenseModal] = useState(false);
     const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
-    const [manualData, setManualData] = useState({ datetime: '', notes: '', cartItems: [] });
+    const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'cash', cartItems: [] });
 
     // Calculate totals from cart items
     const manualCartTotals = manualData.cartItems.reduce((acc, item) => ({
@@ -123,7 +124,7 @@ export default function ReportsPage() {
         if (!txnLoading) {
             filterTransactions();
         }
-    }, [transactions, startDate, endDate, txnLoading]);
+    }, [transactions, startDate, endDate, paymentFilter, txnLoading]);
 
     const filterTransactions = async () => {
         const start = new Date(startDate);
@@ -131,7 +132,12 @@ export default function ReportsPage() {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        const filtered = getTransactionsByDateRange(start, end);
+        let filtered = getTransactionsByDateRange(start, end);
+        
+        if (paymentFilter !== 'all') {
+            filtered = filtered.filter(txn => txn.payment_method === paymentFilter);
+        }
+
         const expenseData = await getExpensesByDateRange(start, end);
 
         setFilteredTxns(filtered);
@@ -185,11 +191,12 @@ export default function ReportsPage() {
                 total_cost: manualCartTotals.totalCost,
                 count: totalQty,
                 notes: manualData.notes,
+                payment_method: manualData.paymentMethod,
                 items
             });
 
             setShowManualModal(false);
-            setManualData({ datetime: '', notes: '', cartItems: [] });
+            setManualData({ datetime: '', notes: '', paymentMethod: 'cash', cartItems: [] });
             alert('Data lama berhasil ditambahkan! Pastikan filter tanggal mencakup tanggal data baru.');
         } catch (error) {
             alert('Error: ' + error.message);
@@ -327,6 +334,21 @@ export default function ReportsPage() {
                                         onChange={e => setEndDate(e.target.value)}
                                     />
                                 </div>
+                                <div style={{ flex: '1 1 140px', minWidth: '140px' }}>
+                                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
+                                        Jenis Pembayaran
+                                    </label>
+                                    <select
+                                        className="input"
+                                        value={paymentFilter}
+                                        onChange={e => setPaymentFilter(e.target.value)}
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <option value="all">Semua</option>
+                                        <option value="cash">Tunai</option>
+                                        <option value="qris">QRIS</option>
+                                    </select>
+                                </div>
                                 <div className="period-filter" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                     <button
                                         className="btn btn-secondary btn-sm"
@@ -460,7 +482,13 @@ export default function ReportsPage() {
                                                     +{formatCurrency(txn.total_profit)}
                                                 </td>
                                                 <td className="hide-mobile">
-                                                    <span className="badge badge-neutral">
+                                                    <span className={`badge ${txn.payment_method === 'cash' ? 'badge-primary' : 'badge-info'}`} style={{ 
+                                                        backgroundColor: txn.payment_method === 'cash' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(33, 150, 243, 0.1)',
+                                                        color: txn.payment_method === 'cash' ? '#4caf50' : '#2196f3',
+                                                        border: `1px solid ${txn.payment_method === 'cash' ? '#4caf50' : '#2196f3'}`,
+                                                        padding: '4px 8px',
+                                                        borderRadius: '4px'
+                                                    }}>
                                                         {txn.payment_method === 'cash' ? 'Tunai' : 'QRIS'}
                                                     </span>
                                                 </td>
@@ -524,6 +552,33 @@ export default function ReportsPage() {
                                             value={manualData.notes}
                                             onChange={e => setManualData({ ...manualData, notes: e.target.value })}
                                         />
+                                </div>
+                                
+                                <div style={{ marginBottom: '16px', background: 'var(--color-bg-secondary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>Jenis Pembayaran *</label>
+                                    <div style={{ display: 'flex', gap: '16px' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
+                                            <input
+                                                type="radio"
+                                                name="paymentMethod"
+                                                value="cash"
+                                                checked={manualData.paymentMethod === 'cash'}
+                                                onChange={e => setManualData({ ...manualData, paymentMethod: e.target.value })}
+                                                style={{ transform: 'scale(1.2)' }}
+                                            />
+                                            <span style={{ fontWeight: '500' }}>Tunai (Cash)</span>
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
+                                            <input
+                                                type="radio"
+                                                name="paymentMethod"
+                                                value="qris"
+                                                checked={manualData.paymentMethod === 'qris'}
+                                                onChange={e => setManualData({ ...manualData, paymentMethod: e.target.value })}
+                                                style={{ transform: 'scale(1.2)' }}
+                                            />
+                                            <span style={{ fontWeight: '500' }}>QRIS</span>
+                                        </label>
                                     </div>
                                 </div>
 
