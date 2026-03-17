@@ -552,6 +552,7 @@ export default function ReportsPage() {
                                             value={manualData.notes}
                                             onChange={e => setManualData({ ...manualData, notes: e.target.value })}
                                         />
+                                    </div>
                                 </div>
                                 
                                 <div style={{ marginBottom: '16px', background: 'var(--color-bg-secondary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
