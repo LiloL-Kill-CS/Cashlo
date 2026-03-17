@@ -93,7 +93,7 @@ export default function SettingsPage() {
     if (authLoading || loading) {
         return (
             <div className="app-container">
-                <Sidebar activePage="settings" />
+                <Sidebar activePage="settings" userRole={user?.role} />
                 <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div className="animate-pulse text-muted">Memuat...</div>
                 </main>
@@ -103,7 +103,7 @@ export default function SettingsPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="settings" />
+            <Sidebar activePage="settings" userRole={user?.role} />
 
             <main className="main-content">
                 <header className="page-header">

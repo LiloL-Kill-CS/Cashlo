@@ -160,7 +160,7 @@ export default function PurchasingPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="purchasing" />
+            <Sidebar activePage="purchasing" userRole={user?.role} />
             <main className="main-content">
                 <header className="page-header">
                     <div>

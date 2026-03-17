@@ -1,4 +1,4 @@
-export default function Sidebar({ activePage }) {
+export default function Sidebar({ activePage, userRole }) {
     return (
         <aside className="sidebar">
             <div className="sidebar-logo">C</div>
@@ -16,6 +16,7 @@ export default function Sidebar({ activePage }) {
                     </svg>
                 </a>
 
+                {userRole !== 'kasir' && (
                 <a
                     href="/dashboard"
                     className={`sidebar-link ${activePage === 'dashboard' ? 'active' : ''}`}
@@ -26,7 +27,9 @@ export default function Sidebar({ activePage }) {
                         <polyline points="9 22 9 12 15 12 15 22"></polyline>
                     </svg>
                 </a>
+                )}
 
+                {userRole !== 'kasir' && (
                 <a
                     href="/reports"
                     className={`sidebar-link ${activePage === 'reports' ? 'active' : ''}`}
@@ -38,6 +41,7 @@ export default function Sidebar({ activePage }) {
                         <line x1="6" y1="20" x2="6" y2="14"></line>
                     </svg>
                 </a>
+                )}
 
                 <a
                     href="/customers"

@@ -49,7 +49,7 @@ export default function CustomersPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="customers" />
+            <Sidebar activePage="customers" userRole={user?.role} />
             <main className="main-content">
                 <header className="page-header">
                     <div>

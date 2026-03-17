@@ -145,7 +145,7 @@ export default function ProductsPage() {
     if (authLoading || loading) {
         return (
             <div className="app-container">
-                <Sidebar activePage="products" />
+                <Sidebar activePage="products" userRole={user?.role} />
                 <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div className="animate-pulse text-muted">Memuat...</div>
                 </main>
@@ -157,7 +157,7 @@ export default function ProductsPage() {
     if (user?.role !== 'admin') {
         return (
             <div className="app-container">
-                <Sidebar activePage="products" />
+                <Sidebar activePage="products" userRole={user?.role} />
                 <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
@@ -171,7 +171,7 @@ export default function ProductsPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="products" />
+            <Sidebar activePage="products" userRole={user?.role} />
 
             <main className="main-content">
                 <header className="page-header">

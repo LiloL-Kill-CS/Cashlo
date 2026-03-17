@@ -29,6 +29,13 @@ export default function ReportsPage() {
     const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
     const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'cash', cartItems: [] });
 
+    // Redirect kasir away from reports
+    useEffect(() => {
+        if (!authLoading && user && user.role === 'kasir') {
+            window.location.href = '/pos';
+        }
+    }, [user, authLoading]);
+
     // Calculate totals from cart items
     const manualCartTotals = manualData.cartItems.reduce((acc, item) => ({
         totalSell: acc.totalSell + (item.sell_price * item.qty),
@@ -277,7 +284,7 @@ export default function ReportsPage() {
     if (authLoading || txnLoading) {
         return (
             <div className="app-container">
-                <Sidebar activePage="reports" />
+                <Sidebar activePage="reports" userRole={user?.role} />
                 <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div className="animate-pulse text-muted">Memuat...</div>
                 </main>
@@ -287,7 +294,7 @@ export default function ReportsPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="reports" />
+            <Sidebar activePage="reports" userRole={user?.role} />
 
             <main className="main-content">
                 <header className="page-header">

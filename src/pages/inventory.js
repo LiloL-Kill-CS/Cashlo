@@ -121,7 +121,7 @@ export default function InventoryPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="inventory" />
+            <Sidebar activePage="inventory" userRole={user?.role} />
             <main className="main-content">
                 <header className="page-header">
                     <div>

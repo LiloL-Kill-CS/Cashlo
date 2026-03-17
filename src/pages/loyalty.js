@@ -77,7 +77,7 @@ export default function LoyaltyPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="loyalty" />
+            <Sidebar activePage="loyalty" userRole={user?.role} />
             <main className="main-content">
                 <header className="page-header">
                     <div>

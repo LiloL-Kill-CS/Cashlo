@@ -182,7 +182,7 @@ export default function POSPage() {
     if (authLoading || productsLoading) {
         return (
             <div className="app-container">
-                <Sidebar activePage="pos" />
+                <Sidebar activePage="pos" userRole={user?.role} />
                 <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div className="animate-pulse text-muted">Memuat...</div>
                 </main>
@@ -192,7 +192,7 @@ export default function POSPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="pos" />
+            <Sidebar activePage="pos" userRole={user?.role} />
 
             <main className="main-content">
                 <header className="page-header">

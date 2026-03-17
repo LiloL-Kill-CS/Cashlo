@@ -100,7 +100,7 @@ export default function HRPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="hr" />
+            <Sidebar activePage="hr" userRole={user?.role} />
             <main className="main-content">
                 <header className="page-header">
                     <div>

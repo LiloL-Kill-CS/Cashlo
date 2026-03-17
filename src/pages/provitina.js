@@ -5,15 +5,17 @@ import ProvitinaHeader from '@/components/provitina/ProvitinaHeader';
 import RevenueProbabilityChart from '@/components/provitina/RevenueProbabilityChart';
 import IntegrationHub from '@/components/provitina/IntegrationHub';
 import { useRegionalData } from '@/hooks/useRegionalData';
+import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/db';
 
 export default function ProvitinaPage() {
+    const { user } = useAuth();
     const { data, loading, error } = useRegionalData();
 
     if (loading) {
         return (
             <div className="app-container">
-                <Sidebar activePage="provitina" />
+                <Sidebar activePage="provitina" userRole={user?.role} />
                 <main className="main-content" style={{ background: 'var(--provitina-bg)' }}>
                     <div style={{
                         height: '100vh',
@@ -54,7 +56,7 @@ export default function ProvitinaPage() {
                 <title>Provitina | Regional Intelligence</title>
             </Head>
 
-            <Sidebar activePage="provitina" />
+            <Sidebar activePage="provitina" userRole={user?.role} />
 
             <main className="main-content" style={{ background: 'var(--provitina-bg)', minHeight: '100vh' }}>
                 <ProvitinaHeader />

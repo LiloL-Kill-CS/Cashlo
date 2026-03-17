@@ -59,6 +59,9 @@ export default function DashboardPage() {
         if (!authLoading && !user) {
             window.location.href = '/';
         }
+        if (!authLoading && user && user.role === 'kasir') {
+            window.location.href = '/pos';
+        }
     }, [user, authLoading]);
 
     useEffect(() => {
@@ -210,7 +213,7 @@ export default function DashboardPage() {
     if (authLoading || txnLoading) {
         return (
             <div className="app-container">
-                <Sidebar activePage="dashboard" />
+                <Sidebar activePage="dashboard" userRole={user?.role} />
                 <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div className="animate-pulse text-muted">Memuat...</div>
                 </main>
@@ -296,7 +299,7 @@ export default function DashboardPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="dashboard" />
+            <Sidebar activePage="dashboard" userRole={user?.role} />
 
             <main className="main-content">
                 <header className="page-header">

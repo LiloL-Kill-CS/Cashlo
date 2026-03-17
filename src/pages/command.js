@@ -41,7 +41,7 @@ export default function CommandCenterPage() {
 
     return (
         <div className="app-container">
-            <Sidebar activePage="command" />
+            <Sidebar activePage="command" userRole={user?.role} />
 
             <main className="main-content">
                 {/* Page Header */}
