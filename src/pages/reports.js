@@ -525,8 +525,8 @@ export default function ReportsPage() {
                             <h3>Input Data Transaksi Lama</h3>
                             <button className="btn btn-ghost btn-icon" onClick={() => setShowManualModal(false)}>✕</button>
                         </div>
-                        <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 80px)' }}>
-                            <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
+                        <form onSubmit={handleManualSubmit}>
+                            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                                 <div className="alert alert-info mb-md" style={{ fontSize: '13px', background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '10px', borderRadius: '6px' }}>
                                     ℹ️ Pilih beberapa produk sekaligus untuk 1 transaksi. Stok tidak akan berkurang.
                                 </div>
