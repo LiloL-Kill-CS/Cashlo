@@ -7,8 +7,8 @@ import { useCustomerInsights } from '@/hooks/useCustomerInsights';
 
 export default function CustomersPage() {
     const { user, loading: authLoading } = useAuth();
-    const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers } = useCustomers(user?.owner_id, user?.role);
-    const { transactions } = useTransactions(user?.owner_id, user?.role, user?.id);
+    const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers } = useCustomers((user?.owner_id || user?.id), user?.role);
+    const { transactions } = useTransactions((user?.owner_id || user?.id), user?.role, user?.id);
     const insights = useCustomerInsights(customers, transactions);
 
     // Use enhanced data from insights if available, else fallback to raw

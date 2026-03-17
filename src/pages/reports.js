@@ -9,10 +9,10 @@ import { formatCurrency, formatDate, formatNumberInput, parseNumberInput } from 
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction, deleteTransaction } = useTransactions(user?.owner_id, user?.role, user?.id);
-    const { products } = useProducts(user?.owner_id, user?.role);
-    const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses(user?.owner_id);
-    const { supplies } = usePurchasing(user?.owner_id, user?.role);
+    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction, deleteTransaction } = useTransactions((user?.owner_id || user?.id), user?.role, user?.id);
+    const { products } = useProducts((user?.owner_id || user?.id), user?.role);
+    const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses((user?.owner_id || user?.id));
+    const { supplies } = usePurchasing((user?.owner_id || user?.id), user?.role);
 
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();

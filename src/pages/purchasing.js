@@ -13,9 +13,9 @@ export default function PurchasingPage() {
         addSupplier, updateSupplier, deleteSupplier,
         addSupply, updateSupply, deleteSupply,
         createPurchase
-    } = usePurchasing(user?.owner_id, user?.role);
+    } = usePurchasing((user?.owner_id || user?.id), user?.role);
     const { warehouses } = useInventory(user?.id, user?.role);
-    const { products } = useProducts(user?.owner_id, user?.role);
+    const { products } = useProducts((user?.owner_id || user?.id), user?.role);
 
     const [activeTab, setActiveTab] = useState('purchases'); // purchases, suppliers, supplies
     const [showSupplierModal, setShowSupplierModal] = useState(false);

@@ -11,7 +11,13 @@ export function AuthProvider({ children }) {
         // Restore session from localStorage (needed for page reloads after login)
         const savedUser = localStorage.getItem('cashlo_user');
         if (savedUser) {
-            setUser(JSON.parse(savedUser));
+            const parsed = JSON.parse(savedUser);
+            // Ensure owner_id always exists (backward compat for old sessions)
+            if (!parsed.owner_id) {
+                parsed.owner_id = parsed.id;
+                localStorage.setItem('cashlo_user', JSON.stringify(parsed));
+            }
+            setUser(parsed);
         }
         setLoading(false);
     }, []);

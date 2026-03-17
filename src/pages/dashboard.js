@@ -38,8 +38,8 @@ ChartJS.register(
 
 export default function DashboardPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTransactionsByDateRange, getTopProducts, getTodayStats } = useTransactions(user?.owner_id, user?.role, user?.id);
-    const { getExpensesByDateRange } = useExpenses(user?.owner_id);
+    const { transactions, loading: txnLoading, getTransactionsByDateRange, getTopProducts, getTodayStats } = useTransactions((user?.owner_id || user?.id), user?.role, user?.id);
+    const { getExpensesByDateRange } = useExpenses((user?.owner_id || user?.id));
     const [period, setPeriod] = useState('today');
     const [stats, setStats] = useState({ 
         revenue: 0, profit: 0, count: 0, expenses: 0, netProfit: 0,

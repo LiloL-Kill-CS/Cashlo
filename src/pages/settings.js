@@ -138,6 +138,42 @@ export default function SettingsPage() {
 
                     {/* User Management (Admin Only) */}
                     {user?.role === 'admin' && (
+                        <>
+                        {/* Highlighted Tambah Kasir Banner */}
+                        <div className="card" style={{
+                            marginBottom: 'var(--spacing-lg)',
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            border: 'none',
+                            color: 'white'
+                        }}>
+                            <div className="card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 28px' }}>
+                                <div>
+                                    <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '6px', color: 'white' }}>
+                                        👥 Hubungkan Akun Kasir
+                                    </h3>
+                                    <p style={{ fontSize: '13px', opacity: 0.9, margin: 0, color: 'rgba(255,255,255,0.9)' }}>
+                                        Buat akun Kasir yang terhubung otomatis ke bisnis Anda. Kasir bisa transaksi, Anda lihat semua laporannya!
+                                    </p>
+                                </div>
+                                <button className="btn" onClick={openAddModal} style={{
+                                    background: 'white',
+                                    color: '#764ba2',
+                                    fontWeight: '700',
+                                    padding: '12px 24px',
+                                    fontSize: '14px',
+                                    borderRadius: '10px',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+                                    transition: 'transform 0.2s, box-shadow 0.2s'
+                                }}
+                                onMouseOver={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.25)'; }}
+                                onMouseOut={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.15)'; }}
+                                >
+                                    + Tambah Kasir
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="card">
                             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <h3 style={{ fontSize: 'var(--font-size-lg)' }}>Manajemen Pengguna</h3>
@@ -189,6 +225,7 @@ export default function SettingsPage() {
                                 </table>
                             </div>
                         </div>
+                        </>
                     )}
 
                     {/* App Info */}

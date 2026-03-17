@@ -13,10 +13,10 @@ import { useProducts } from '@/hooks/useProducts';
 
 export default function CommandCenterPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading } = useTransactions(user?.owner_id, user?.role, user?.id);
+    const { transactions, loading: txnLoading } = useTransactions((user?.owner_id || user?.id), user?.role, user?.id);
     const { stocks, loading: stockLoading } = useInventory(user?.id, user?.role);
-    const { expenses, loading: expLoading } = useExpenses(user?.owner_id);
-    const { products, loading: prodLoading } = useProducts(user?.owner_id, user?.role);
+    const { expenses, loading: expLoading } = useExpenses((user?.owner_id || user?.id));
+    const { products, loading: prodLoading } = useProducts((user?.owner_id || user?.id), user?.role);
 
     useEffect(() => {
         if (!authLoading && !user) {
