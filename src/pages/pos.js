@@ -373,3 +373,6 @@ export default function POSPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };

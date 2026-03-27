@@ -537,3 +537,6 @@ export default function DashboardPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };

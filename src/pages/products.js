@@ -473,3 +473,6 @@ export default function ProductsPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };

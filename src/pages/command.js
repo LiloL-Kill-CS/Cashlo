@@ -212,3 +212,6 @@ export default function CommandCenterPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };

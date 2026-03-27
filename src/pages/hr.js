@@ -346,3 +346,6 @@ export default function HRPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };

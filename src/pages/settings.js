@@ -327,3 +327,6 @@ export default function SettingsPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };

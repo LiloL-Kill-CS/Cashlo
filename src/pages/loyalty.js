@@ -230,3 +230,6 @@ export default function LoyaltyPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };

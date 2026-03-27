@@ -840,3 +840,6 @@ export default function ReportsPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };

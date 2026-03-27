@@ -221,3 +221,6 @@ export default function CustomersPage() {
         </div>
     );
 }
+
+
+export const getServerSideProps = async () => { return { props: {} }; };
