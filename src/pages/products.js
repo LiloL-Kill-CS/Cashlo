@@ -153,21 +153,7 @@ export default function ProductsPage() {
         );
     }
 
-    // Only admin can access
-    if (user?.role !== 'admin') {
-        return (
-            <div className="app-container">
-                <Sidebar activePage="products" userRole={user?.role} />
-                <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
-                        <h2>Akses Ditolak</h2>
-                        <p className="text-secondary">Hanya Admin yang dapat mengakses halaman ini</p>
-                    </div>
-                </main>
-            </div>
-        );
-    }
+    // No full page block - Kasir can see products, but can't edit
 
     return (
         <div className="app-container">
@@ -181,12 +167,16 @@ export default function ProductsPage() {
                     </div>
 
                     <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                        <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
-                            📁 Kategori
-                        </button>
-                        <button className="btn btn-primary" onClick={openAddModal}>
-                            + Tambah Produk
-                        </button>
+                        {user?.role === 'admin' && (
+                            <>
+                                <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
+                                    📁 Kategori
+                                </button>
+                                <button className="btn btn-primary" onClick={openAddModal}>
+                                    + Tambah Produk
+                                </button>
+                            </>
+                        )}
                     </div>
                 </header>
 
@@ -235,12 +225,16 @@ export default function ProductsPage() {
                                                 <span className="badge badge-neutral">{category?.name || 'Unknown'}</span>
                                             </div>
                                             <div style={{ display: 'flex', gap: '4px' }}>
-                                                <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(product)}>
-                                                    ✏️
-                                                </button>
-                                                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(product)}>
-                                                    🗑️
-                                                </button>
+                                                {user?.role === 'admin' && (
+                                                    <>
+                                                        <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(product)}>
+                                                            ✏️
+                                                        </button>
+                                                        <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(product)}>
+                                                            🗑️
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
 

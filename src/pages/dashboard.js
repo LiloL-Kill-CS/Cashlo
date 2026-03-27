@@ -59,9 +59,6 @@ export default function DashboardPage() {
         if (!authLoading && !user) {
             window.location.href = '/';
         }
-        if (!authLoading && user && user.role === 'kasir') {
-            window.location.href = '/pos';
-        }
     }, [user, authLoading]);
 
     useEffect(() => {
@@ -361,28 +358,28 @@ export default function DashboardPage() {
                         <div className="card stat-card">
                             <div className="card-body">
                                 <h3 className="text-secondary text-sm">Gross Profit</h3>
-                                <p className="text-xl font-bold text-success">{formatCurrency(stats.profit)}</p>
+                                <p className="text-xl font-bold text-success">{user?.role === 'admin' ? formatCurrency(stats.profit) : '***'}</p>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px' }}>
-                                    <span style={{ color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cash: {formatCurrency(stats.profitCash)}</span>
-                                    <span style={{ color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {formatCurrency(stats.profitQris)}</span>
+                                    <span style={{ color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cash: {user?.role === 'admin' ? formatCurrency(stats.profitCash) : '***'}</span>
+                                    <span style={{ color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {user?.role === 'admin' ? formatCurrency(stats.profitQris) : '***'}</span>
                                 </div>
                             </div>
                         </div>
                         <div className="card stat-card">
                             <div className="card-body">
                                 <h3 className="text-secondary text-sm">Pengeluaran</h3>
-                                <p className="text-xl font-bold text-warning">{formatCurrency(stats.expenses)}</p>
+                                <p className="text-xl font-bold text-warning">{user?.role === 'admin' ? formatCurrency(stats.expenses) : '***'}</p>
                             </div>
                         </div>
                         <div className="card stat-card">
                             <div className="card-body">
                                 <h3 className="text-secondary text-sm">Net Worth (Bersih)</h3>
                                 <p className="text-xl font-bold" style={{ color: stats.netProfit >= 0 ? 'var(--color-primary)' : 'var(--color-error)' }}>
-                                    {formatCurrency(stats.netProfit)}
+                                    {user?.role === 'admin' ? formatCurrency(stats.netProfit) : '***'}
                                 </p>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px' }}>
-                                    <span style={{ color: stats.netProfitCash >= 0 ? 'var(--color-success)' : 'var(--color-error)', background: 'var(--color-success-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cash: {formatCurrency(stats.netProfitCash)}</span>
-                                    <span style={{ color: stats.netProfitQris >= 0 ? 'var(--color-info)' : 'var(--color-error)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {formatCurrency(stats.netProfitQris)}</span>
+                                    <span style={{ color: stats.netProfitCash >= 0 ? 'var(--color-success)' : 'var(--color-error)', background: 'var(--color-success-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cash: {user?.role === 'admin' ? formatCurrency(stats.netProfitCash) : '***'}</span>
+                                    <span style={{ color: stats.netProfitQris >= 0 ? 'var(--color-info)' : 'var(--color-error)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {user?.role === 'admin' ? formatCurrency(stats.netProfitQris) : '***'}</span>
                                 </div>
                             </div>
                         </div>

@@ -189,12 +189,16 @@ export default function InventoryPage() {
                                                     </span>
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
-                                                    <button className="btn btn-sm btn-outline" onClick={() => openAdjustmentModal(item)}>
-                                                        Sesuaikan
-                                                    </button>
-                                                    <button className="btn btn-sm btn-ghost text-error" onClick={() => handleDeleteProduct(item)}>
-                                                        🗑️
-                                                    </button>
+                                                    {user?.role === 'admin' && (
+                                                        <>
+                                                            <button className="btn btn-sm btn-outline" onClick={() => openAdjustmentModal(item)}>
+                                                                Sesuaikan
+                                                            </button>
+                                                            <button className="btn btn-sm btn-ghost text-error" onClick={() => handleDeleteProduct(item)}>
+                                                                🗑️
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -250,7 +254,9 @@ export default function InventoryPage() {
                         <div className="card">
                             <div className="card-header flex justify-between">
                                 <h3>Daftar Gudang / Cabang</h3>
-                                <button className="btn btn-primary btn-sm" onClick={() => { setFormData({ name: '', address: '' }); setWarehouseModal(true); }}>+ Gudang Baru</button>
+                                {user?.role === 'admin' && (
+                                    <button className="btn btn-primary btn-sm" onClick={() => { setFormData({ name: '', address: '' }); setWarehouseModal(true); }}>+ Gudang Baru</button>
+                                )}
                             </div>
                             <div className="card-body p-0">
                                 <table className="table">
@@ -269,9 +275,13 @@ export default function InventoryPage() {
                                                 <td>{w.address || '-'}</td>
                                                 <td>{w.is_primary ? <span className="badge badge-primary">Utama</span> : 'Cabang'}</td>
                                                 <td style={{ textAlign: 'right' }}>
-                                                    <button className="btn btn-sm btn-ghost" onClick={() => openEditWarehouse(w)}>✏️</button>
-                                                    {!w.is_primary && (
-                                                        <button className="btn btn-sm btn-ghost text-error" onClick={() => { if (confirm('Hapus gudang ini?')) deleteWarehouse(w.id) }}>🗑️</button>
+                                                    {user?.role === 'admin' && (
+                                                        <>
+                                                            <button className="btn btn-sm btn-ghost" onClick={() => openEditWarehouse(w)}>✏️</button>
+                                                            {!w.is_primary && (
+                                                                <button className="btn btn-sm btn-ghost text-error" onClick={() => { if (confirm('Hapus gudang ini?')) deleteWarehouse(w.id) }}>🗑️</button>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </td>
                                             </tr>

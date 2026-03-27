@@ -178,13 +178,13 @@ export default function PurchasingPage() {
                             <button className={`btn ${activeTab === 'suppliers' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('suppliers')}>👥 Supplier</button>
                             <button className={`btn ${activeTab === 'supplies' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('supplies')}>📦 Bahan/Supply</button>
                         </div>
-                        {activeTab === 'suppliers' && (
+                        {activeTab === 'suppliers' && user?.role === 'admin' && (
                             <button className="btn btn-primary" onClick={() => { setSupplierForm({}); setShowSupplierModal(true); }}>+ Supplier Baru</button>
                         )}
-                        {activeTab === 'supplies' && (
+                        {activeTab === 'supplies' && user?.role === 'admin' && (
                             <button className="btn btn-primary" onClick={() => { setSupplyForm({ name: '', unit: 'pcs', default_price: '' }); setShowSupplyModal(true); }}>+ Tambah Bahan</button>
                         )}
-                        {activeTab === 'purchases' && (
+                        {activeTab === 'purchases' && user?.role === 'admin' && (
                             <button className="btn btn-primary" onClick={() => {
                                 if (suppliers.length === 0 || warehouses.length === 0) {
                                     alert('Pastikan ada data Supplier dan Gudang.');
@@ -256,12 +256,14 @@ export default function PurchasingPage() {
                                                     <td>{s.phone || '-'}</td>
                                                     <td>{s.address || '-'}</td>
                                                     <td style={{ textAlign: 'right' }}>
-                                                        <button
-                                                            className="btn btn-sm btn-outline"
-                                                            onClick={() => { setSupplierForm(s); setShowSupplierModal(true); }}
-                                                        >
-                                                            Edit
-                                                        </button>
+                                                        {user?.role === 'admin' && (
+                                                            <button
+                                                                className="btn btn-sm btn-outline"
+                                                                onClick={() => { setSupplierForm(s); setShowSupplierModal(true); }}
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))
@@ -297,24 +299,28 @@ export default function PurchasingPage() {
                                                     <td>{s.unit || 'pcs'}</td>
                                                     <td>{formatCurrency(s.default_price || 0)}</td>
                                                     <td style={{ textAlign: 'right' }}>
-                                                        <button
-                                                            className="btn btn-sm btn-outline"
-                                                            onClick={() => { setSupplyForm(s); setShowSupplyModal(true); }}
-                                                            style={{ marginRight: '4px' }}
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-sm btn-ghost"
-                                                            style={{ color: 'var(--color-error)' }}
-                                                            onClick={async () => {
-                                                                if (confirm(`Hapus "${s.name}"?`)) {
-                                                                    await deleteSupply(s.id);
-                                                                }
-                                                            }}
-                                                        >
-                                                            Hapus
-                                                        </button>
+                                                        {user?.role === 'admin' && (
+                                                            <>
+                                                                <button
+                                                                    className="btn btn-sm btn-outline"
+                                                                    onClick={() => { setSupplyForm(s); setShowSupplyModal(true); }}
+                                                                    style={{ marginRight: '4px' }}
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-sm btn-ghost"
+                                                                    style={{ color: 'var(--color-error)' }}
+                                                                    onClick={async () => {
+                                                                        if (confirm(`Hapus "${s.name}"?`)) {
+                                                                            await deleteSupply(s.id);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    Hapus
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))

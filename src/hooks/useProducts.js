@@ -39,6 +39,7 @@ export function useProducts(userId, userRole) {
     }
 
     async function addProduct(product) {
+        if (userRole === 'kasir') throw new Error('Kasir tidak diizinkan menambah produk');
         const id = `prod-${Date.now()}`;
         const newProduct = {
             ...product,
@@ -58,6 +59,7 @@ export function useProducts(userId, userRole) {
     }
 
     async function updateProduct(id, updates) {
+        if (userRole === 'kasir') throw new Error('Kasir tidak diizinkan mengubah produk');
         const updateData = {
             ...updates,
             updated_at: new Date().toISOString()
@@ -67,14 +69,19 @@ export function useProducts(userId, userRole) {
             updateData.modifiers = JSON.stringify(updates.modifiers);
         }
 
-        const { error } = await supabase.from('products').update(updateData).eq('id', id);
+        const { error } = await supabase.from('products').update(updateData).eq('id', id).eq('owner_id', userId);
         if (error) console.error('Error updating product:', error);
 
         await loadData();
     }
 
     async function deleteProduct(id) {
+        if (userRole === 'kasir') throw new Error('Kasir tidak diizinkan menghapus produk');
         try {
+            // Assert Ownership first (IDOR fix)
+            const { data: ownCheck } = await supabase.from('products').select('id').eq('id', id).eq('owner_id', userId).single();
+            if (!ownCheck) throw new Error('Product not found or unauthorized');
+
             // Delete all related records first (in order of dependencies)
             // 1. Delete from transaction_items (sales history)
             await supabase.from('transaction_items').delete().eq('product_id', id);
@@ -85,7 +92,7 @@ export function useProducts(userId, userRole) {
             // 4. Delete product stocks
             await supabase.from('product_stocks').delete().eq('product_id', id);
             // 5. Finally delete the product itself
-            const { error } = await supabase.from('products').delete().eq('id', id);
+            const { error } = await supabase.from('products').delete().eq('id', id).eq('owner_id', userId);
             if (error) {
                 console.error('Error deleting product:', error);
                 throw error;
@@ -98,6 +105,7 @@ export function useProducts(userId, userRole) {
     }
 
     async function addCategory(name) {
+        if (userRole === 'kasir') throw new Error('Kasir tidak diizinkan menambah kategori');
         const maxOrder = categories.length > 0
             ? Math.max(...categories.map(c => c.order))
             : 0;

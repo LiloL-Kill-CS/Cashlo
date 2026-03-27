@@ -47,7 +47,8 @@ export function useRegionalData() {
 
     async function getAIContext(businessData = {}) {
         try {
-            const response = await fetch(`/api/regional-data?type=context&businessData=${JSON.stringify(businessData)}`);
+            const encodedData = encodeURIComponent(JSON.stringify(businessData));
+            const response = await fetch(`/api/regional-data?type=context&businessData=${encodedData}`);
             const result = await response.json();
             return result.success ? result.data : '';
         } catch (err) {

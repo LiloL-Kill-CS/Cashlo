@@ -1,6 +1,14 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
 
+// Helper function to hash passwords
+async function hashPassword(password) {
+    const msgBuffer = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -54,16 +62,9 @@ export function AuthProvider({ children }) {
             throw new Error('Akun tidak aktif');
         }
 
-        // Simple password check (in production, use proper hashing)
-        // Note: In Supabase table we stored literal "admin123" / "kasir123" as hash for simplicity in this migration demo
-        // Ideally you should verify the hash. For now assuming the stored value is the password or doing simple match as per original code.
-        // The original code had specific hardcoded check for admin/kasir passwords.
-        // Let's keep the hardcoded check for simplicity as the user requested quick migration, OR check against DB field if we trusted the migration data.
-        // The migration SQL inserted literal 'admin123' into password_hash field for clarity? No, the SQL had 'admin123'.
-        // Wait, original code had: validPasswords['admin'] !== password.
-        // Let's use the DB password_hash field to compare.
-
-        if (foundUser.password_hash !== password) {
+        // Simple password check using SHA-256 hash or plaintext fallback for old accounts
+        const hashedPassword = await hashPassword(password);
+        if (foundUser.password_hash !== hashedPassword && foundUser.password_hash !== password) {
             throw new Error('Password salah');
         }
 
@@ -98,13 +99,15 @@ export function AuthProvider({ children }) {
         // If no owner_id provided, default to self
         const finalOwnerId = owner_id || newId;
 
+        const hashedPassword = await hashPassword(password);
+
         // Create new user
         const { data, error } = await supabase
             .from('users')
             .insert([{
                 id: newId,
                 username,
-                password_hash: password, // In production, hash this
+                password_hash: hashedPassword,
                 name,
                 role,
                 owner_id: finalOwnerId,

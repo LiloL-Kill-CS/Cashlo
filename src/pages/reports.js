@@ -29,12 +29,7 @@ export default function ReportsPage() {
     const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
     const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [] });
 
-    // Redirect kasir away from reports
-    useEffect(() => {
-        if (!authLoading && user && user.role === 'kasir') {
-            window.location.href = '/pos';
-        }
-    }, [user, authLoading]);
+    // Removed redirect as Cashiers can now access reports but see limited data
 
     // Calculate totals from cart items
     const manualCartTotals = manualData.cartItems.reduce((acc, item) => ({
@@ -306,12 +301,16 @@ export default function ReportsPage() {
                     <button className="btn btn-primary" onClick={exportCSV} disabled={filteredTxns.length === 0}>
                         📥 Export CSV
                     </button>
-                    <button className="btn btn-secondary ml-sm" onClick={() => setShowManualModal(true)}>
-                        ➕ Input Data Lama
-                    </button>
-                    <button className="btn btn-warning ml-sm" onClick={() => setShowExpenseModal(true)} style={{ marginLeft: '8px' }}>
-                        💸 Kelola Pengeluaran
-                    </button>
+                    {user?.role === 'admin' && (
+                        <>
+                            <button className="btn btn-secondary ml-sm" onClick={() => setShowManualModal(true)}>
+                                ➕ Input Data Lama
+                            </button>
+                            <button className="btn btn-warning ml-sm" onClick={() => setShowExpenseModal(true)} style={{ marginLeft: '8px' }}>
+                                💸 Kelola Pengeluaran
+                            </button>
+                        </>
+                    )}
                 </header>
 
                 <div style={{ padding: 'var(--spacing-lg)' }}>
@@ -429,19 +428,25 @@ export default function ReportsPage() {
                         <div className="card stat-card">
                             <div className="card-body">
                                 <h3 className="text-secondary text-sm">Gross Profit</h3>
-                                <p className="text-xl font-bold text-success">{formatCurrency(stats.grossProfit)}</p>
+                                <p className="text-xl font-bold text-success">
+                                    {user?.role === 'admin' ? formatCurrency(stats.grossProfit) : '***'}
+                                </p>
                             </div>
                         </div>
                         <div className="card stat-card">
                             <div className="card-body">
                                 <h3 className="text-secondary text-sm">Pengeluaran (Gaji/Sewa)</h3>
-                                <p className="text-xl font-bold text-warning">{formatCurrency(stats.expenses)}</p>
+                                <p className="text-xl font-bold text-warning">
+                                    {user?.role === 'admin' ? formatCurrency(stats.expenses) : '***'}
+                                </p>
                             </div>
                         </div>
                         <div className="card stat-card">
                             <div className="card-body">
                                 <h3 className="text-secondary text-sm">Net Profit (Bersih)</h3>
-                                <p className="text-xl font-bold text-primary">{formatCurrency(stats.netProfit)}</p>
+                                <p className="text-xl font-bold text-primary">
+                                    {user?.role === 'admin' ? formatCurrency(stats.netProfit) : '***'}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -461,8 +466,12 @@ export default function ReportsPage() {
                                         <th>Waktu</th>
                                         <th>Items</th>
                                         <th style={{ textAlign: 'right' }}>Omzet</th>
-                                        <th className="hide-mobile" style={{ textAlign: 'right' }}>HPP</th>
-                                        <th style={{ textAlign: 'right' }}>Profit</th>
+                                        {user?.role === 'admin' && (
+                                            <>
+                                                <th className="hide-mobile" style={{ textAlign: 'right' }}>HPP</th>
+                                                <th style={{ textAlign: 'right' }}>Profit</th>
+                                            </>
+                                        )}
                                         <th className="hide-mobile">Metode</th>
                                         <th style={{ textAlign: 'center' }}>Aksi</th>
                                     </tr>
@@ -482,12 +491,16 @@ export default function ReportsPage() {
                                                 <td style={{ textAlign: 'right', fontWeight: '500' }}>
                                                     {formatCurrency(txn.subtotal)}
                                                 </td>
-                                                <td className="hide-mobile" style={{ textAlign: 'right', color: 'var(--color-warning)' }}>
-                                                    {formatCurrency(txn.total_cost)}
-                                                </td>
-                                                <td style={{ textAlign: 'right', color: 'var(--color-success)', fontWeight: '500' }}>
-                                                    +{formatCurrency(txn.total_profit)}
-                                                </td>
+                                                {user?.role === 'admin' && (
+                                                    <>
+                                                        <td className="hide-mobile" style={{ textAlign: 'right', color: 'var(--color-warning)' }}>
+                                                            {formatCurrency(txn.total_cost)}
+                                                        </td>
+                                                        <td style={{ textAlign: 'right', color: 'var(--color-success)', fontWeight: '500' }}>
+                                                            +{formatCurrency(txn.total_profit)}
+                                                        </td>
+                                                    </>
+                                                )}
                                                 <td className="hide-mobile">
                                                     <span className={`badge ${txn.payment_method === 'cash' ? 'badge-primary' : 'badge-info'}`} style={{ 
                                                         backgroundColor: txn.payment_method === 'cash' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(33, 150, 243, 0.1)',
@@ -500,14 +513,16 @@ export default function ReportsPage() {
                                                     </span>
                                                 </td>
                                                 <td style={{ textAlign: 'center' }}>
-                                                    <button
-                                                        className="btn btn-ghost btn-xs"
-                                                        style={{ color: 'var(--color-error)' }}
-                                                        onClick={() => deleteTransaction(txn.id)}
-                                                        title="Hapus transaksi"
-                                                    >
-                                                        🗑️
-                                                    </button>
+                                                    {user?.role === 'admin' && (
+                                                        <button
+                                                            className="btn btn-ghost btn-xs"
+                                                            style={{ color: 'var(--color-error)' }}
+                                                            onClick={() => deleteTransaction(txn.id)}
+                                                            title="Hapus transaksi"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );
