@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
-    const { user, loading: authLoading, logout } = useAuth();
+    const { user, loading: authLoading, logout, register } = useAuth();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -29,7 +29,7 @@ export default function SettingsPage() {
 
     async function loadUsers() {
         try {
-            const { data: allUsers, error } = await supabase.from('users').select('*');
+            const { data: allUsers, error } = await supabase.from('users').select('*').eq('owner_id', user.id);
             if (error) throw error;
             setUsers(allUsers);
         } catch (error) {
@@ -62,19 +62,19 @@ export default function SettingsPage() {
             const { error } = await supabase.from('users').update(updates).eq('id', editingUser.id);
             if (error) console.error('Error updating user:', error);
         } else {
-            const newId = `user-${Date.now()}`;
-            const userData = {
-                id: newId,
-                name: formData.name,
-                username: formData.username,
-                password_hash: formData.password, // In production, hash this
-                role: formData.role,
-                owner_id: user.id, // Assign the kasir to the current admin
-                is_active: true,
-                created_at: new Date().toISOString()
-            };
-            const { error } = await supabase.from('users').insert([userData]);
-            if (error) console.error('Error adding user:', error);
+                        try {
+                await register(
+                    formData.username, 
+                    formData.password, 
+                    formData.name, 
+                    formData.role, 
+                    user.id
+                );
+            } catch (error) {
+                console.error('Error adding user:', error);
+                alert(error.message);
+                return;
+            }
         }
 
         await loadUsers();
