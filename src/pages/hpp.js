@@ -30,6 +30,8 @@ export default function HPPPage() {
 
     useEffect(() => {
         if (!authLoading && !user) window.location.href = '/';
+        // Block kasir from accessing HPP calculator
+        if (!authLoading && user?.role === 'kasir') window.location.href = '/pos';
     }, [user, authLoading]);
 
     // --- Supplier CRUD ---

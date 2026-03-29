@@ -14,6 +14,13 @@ export default function ReportsPage() {
     const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses((user?.owner_id || user?.id));
     const { supplies } = usePurchasing((user?.owner_id || user?.id), user?.role);
 
+    // Block kasir from accessing reports
+    useEffect(() => {
+        if (!authLoading && user?.role === 'kasir') {
+            window.location.href = '/pos';
+        }
+    }, [user, authLoading]);
+
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
         d.setDate(1);
