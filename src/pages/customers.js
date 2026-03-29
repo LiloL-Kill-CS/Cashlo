@@ -36,8 +36,15 @@ export default function CustomersPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (editingCustomer) await updateCustomer(editingCustomer.id, formData);
-            else await addCustomer(formData);
+            // Convert empty optional fields to null to avoid unique constraint errors
+            const cleanData = {
+                name: formData.name,
+                phone: formData.phone?.trim() || null,
+                email: formData.email?.trim() || null,
+                address: formData.address?.trim() || null
+            };
+            if (editingCustomer) await updateCustomer(editingCustomer.id, cleanData);
+            else await addCustomer(cleanData);
             setShowModal(false);
         } catch (error) { alert(error.message); }
     };
@@ -187,18 +194,17 @@ export default function CustomersPage() {
                                                         {formatCurrency(c.stats?.total_spent || 0)}
                                                     </td>
                                                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                        {(c.points || 0) > 0 && (
-                                                            <button className="btn btn-xs btn-outline" style={{ borderColor: '#f59e0b', color: '#f59e0b', marginRight: '4px' }}
-                                                                onClick={() => openRedeemModal(c)}>
-                                                                🎁 Redeem
-                                                            </button>
-                                                        )}
+                                                        <button className="btn btn-xs btn-outline" style={{ borderColor: '#f59e0b', color: '#f59e0b', marginRight: '4px' }}
+                                                            onClick={() => openRedeemModal(c)}>
+                                                            🎁 {(c.points || 0) > 0 ? 'Redeem' : 'Poin'}
+                                                        </button>
                                                         {c.health?.status === 'At Risk' && (
                                                             <button className="btn btn-xs btn-outline-warning mr-xs" onClick={() => alert(`Simulasi: Mengirim Voucher Diskon ke WA ${c.phone}`)}>
                                                                 📩
                                                             </button>
                                                         )}
                                                         <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(c)}>✏️</button>
+                                                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(c.id)}>🗑️</button>
                                                     </td>
                                                 </tr>
                                             );
