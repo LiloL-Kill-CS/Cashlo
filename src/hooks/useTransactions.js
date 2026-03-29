@@ -137,16 +137,19 @@ export function useTransactions(userId, userRole, actualUserId) {
             console.error('Error updating inventory:', invError);
         }
 
-        // --- UPDATE CUSTOMER POINTS (Skipped if columns missing) ---
-        /*
+        // --- UPDATE CUSTOMER POINTS: 1 produk = 1 poin ---
         if (customerId) {
-            const { data: customer } = await supabase.from('customers').select('points').eq('id', customerId).single();
-            if (customer) {
-                const newPoints = (customer.points || 0) + 1; // Simplified logic
-                await supabase.from('customers').update({ points: newPoints }).eq('id', customerId);
+            try {
+                const totalProductsBought = items.reduce((sum, item) => sum + (item.qty || 1), 0);
+                const { data: customer } = await supabase.from('customers').select('points').eq('id', customerId).single();
+                if (customer) {
+                    const newPoints = (customer.points || 0) + totalProductsBought;
+                    await supabase.from('customers').update({ points: newPoints }).eq('id', customerId);
+                }
+            } catch (ptError) {
+                console.error('Error updating customer points:', ptError);
             }
         }
-        */
 
         await loadTransactions();
         return transaction;
