@@ -543,6 +543,14 @@ a:hover {
   left: 0;
   height: 100vh;
   z-index: 50;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.sidebar::-webkit-scrollbar {
+  display: none;
 }
 
 .sidebar-logo {
@@ -556,7 +564,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  flex: 1;
+  flex: 1 0 auto;
 }
 
 .sidebar-link {
@@ -1508,6 +1516,77 @@ a:hover {
 
   .cart-section {
     bottom: 50px;
+  }
+}
+
+/* ============================================
+   LANDSCAPE TABLET (wide screen, short height)
+   Converts sidebar to horizontal bottom nav
+   ============================================ */
+@media (min-width: 769px) and (max-height: 700px) {
+  .sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    height: 56px;
+    width: 100%;
+    flex-direction: row;
+    padding: 0;
+    border-right: none;
+    border-top: 1px solid var(--color-border);
+    z-index: 100;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-logo {
+    display: none;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    flex: none;
+    padding: 0 var(--spacing-sm);
+  }
+
+  .sidebar-link {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    margin: 5px 2px;
+  }
+
+  .sidebar-link svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .sidebar>a:last-child {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    margin: 5px 6px;
+  }
+
+  .main-content {
+    margin-left: 0;
+    margin-bottom: 56px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .cart-section {
+    bottom: 56px;
     max-height: 50vh;
   }
 
