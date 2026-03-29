@@ -72,7 +72,11 @@ export default function CustomersPage() {
         return transactions
             .filter(t => t.customer_id === customerId)
             .reduce((sum, t) => {
-                const items = t.items || [];
+                let items = t.items || [];
+                if (typeof items === 'string') {
+                    try { items = JSON.parse(items); } catch { items = []; }
+                }
+                if (!Array.isArray(items)) items = [];
                 return sum + items.reduce((s, i) => s + (i.qty || i.quantity || 1), 0);
             }, 0);
     };
