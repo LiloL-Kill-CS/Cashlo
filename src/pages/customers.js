@@ -4,22 +4,25 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCustomerInsights } from '@/hooks/useCustomerInsights';
+import { useLoyalty } from '@/hooks/useLoyalty';
+import { formatCurrency } from '@/lib/db';
 
 export default function CustomersPage() {
     const { user, loading: authLoading } = useAuth();
-    const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers } = useCustomers((user?.owner_id || user?.id), user?.role);
-    const { transactions } = useTransactions((user?.owner_id || user?.id), user?.role, user?.id);
+    const ownerId = user?.owner_id || user?.id;
+    const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers, deductPoints } = useCustomers(ownerId, user?.role);
+    const { transactions } = useTransactions(ownerId, user?.role, user?.id);
+    const { rewards } = useLoyalty(ownerId);
     const insights = useCustomerInsights(customers, transactions);
 
-    // Use enhanced data from insights if available, else fallback to raw
     const displayCustomers = insights?.customerData || customers;
 
     const [searchQuery, setSearchQuery] = useState('');
     const [showModal, setShowModal] = useState(false);
+    const [showRedeemModal, setShowRedeemModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
+    const [redeemingCustomer, setRedeemingCustomer] = useState(null);
     const [formData, setFormData] = useState({ name: '', phone: '', email: '', address: '' });
-
-    // ... (keep modal logic same) ...
 
     const handleSearch = (e) => {
         const query = e.target.value;
@@ -27,13 +30,9 @@ export default function CustomersPage() {
         searchCustomers(query);
     };
 
-    // ... (keep submit/delete logic same) ...
-    // Note: Re-implementing handlers here to ensure they close over latest state if needed, 
-    // but principally we just need to render the new UI.
-
-    // Re-declaring for clarity in replacement
     const openAddModal = () => { setEditingCustomer(null); setFormData({ name: '', phone: '', email: '', address: '' }); setShowModal(true); };
     const openEditModal = (c) => { setEditingCustomer(c); setFormData({ name: c.name, phone: c.phone || '', email: c.email || '', address: c.address || '' }); setShowModal(true); };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
@@ -42,8 +41,34 @@ export default function CustomersPage() {
             setShowModal(false);
         } catch (error) { alert(error.message); }
     };
-    const handleDelete = async (id) => { if (confirm('Hapus?')) await deleteCustomer(id); };
 
+    const handleDelete = async (id) => { if (confirm('Hapus pelanggan ini?')) await deleteCustomer(id); };
+
+    // --- Redeem Points ---
+    const openRedeemModal = (customer) => {
+        setRedeemingCustomer(customer);
+        setShowRedeemModal(true);
+    };
+
+    const handleRedeem = async (rewardId, pointsCost) => {
+        if (!redeemingCustomer) return;
+        try {
+            await deductPoints(redeemingCustomer.id, pointsCost);
+            alert(`✅ Berhasil redeem! ${pointsCost} poin dikurangi.`);
+            setShowRedeemModal(false);
+        } catch (err) { alert('Gagal: ' + err.message); }
+    };
+
+    // --- Calculate product purchase count per customer ---
+    const getProductCount = (customerId) => {
+        if (!transactions?.length) return 0;
+        return transactions
+            .filter(t => t.customer_id === customerId)
+            .reduce((sum, t) => {
+                const items = t.items || [];
+                return sum + items.reduce((s, i) => s + (i.qty || i.quantity || 1), 0);
+            }, 0);
+    };
 
     if (authLoading || customersLoading) return <div className="p-xl text-center">Memuat...</div>;
 
@@ -54,13 +79,13 @@ export default function CustomersPage() {
                 <header className="page-header">
                     <div>
                         <h1 className="page-title">Pelanggan</h1>
-                        <p className="text-secondary text-sm">Analisis Retensi & Loyalty</p>
+                        <p className="text-secondary text-sm">Analisis Retensi, Loyalty & Poin (1 Produk = 1 Poin)</p>
                     </div>
                 </header>
 
                 <div style={{ padding: '0 var(--spacing-xl) var(--spacing-xl)' }}>
 
-                    {/* 📊 Retention Console */}
+                    {/* Retention Console */}
                     {insights && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-md mb-lg">
                             <div className="card p-md flex items-center gap-md">
@@ -97,64 +122,87 @@ export default function CustomersPage() {
                     <div className="card">
                         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div className="search-bar" style={{ width: '300px' }}>
-                                <input
-                                    type="text"
-                                    className="input"
-                                    placeholder="Cari nama..."
-                                    value={searchQuery}
-                                    onChange={handleSearch}
-                                />
+                                <input type="text" className="input" placeholder="Cari nama..." value={searchQuery} onChange={handleSearch} />
                             </div>
-                            <button className="btn btn-primary" onClick={openAddModal}>
-                                + Pelanggan Baru
-                            </button>
+                            <button className="btn btn-primary" onClick={openAddModal}>+ Pelanggan Baru</button>
                         </div>
                         <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-                            <table className="table">
+                            <table className="table" style={{ minWidth: '850px' }}>
                                 <thead>
                                     <tr>
                                         <th>Nama</th>
-                                        <th>Status Kesehatan</th>
-                                        <th>Interval Kunjungan</th>
-                                        <th>Terakhir Datang</th>
-                                        <th>Total Belanja</th>
+                                        <th>Status</th>
+                                        <th style={{ textAlign: 'center' }}>Produk Dibeli</th>
+                                        <th style={{ textAlign: 'center' }}>Poin</th>
+                                        <th>Interval</th>
+                                        <th>Terakhir</th>
+                                        <th style={{ textAlign: 'right' }}>Total Belanja</th>
                                         <th style={{ textAlign: 'right' }}>Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {displayCustomers.length === 0 ? (
-                                        <tr><td colSpan="6" className="text-center p-xl">Belum ada data</td></tr>
+                                        <tr><td colSpan="8" className="text-center p-xl">Belum ada data</td></tr>
                                     ) : (
-                                        displayCustomers.map(c => (
-                                            <tr key={c.id}>
-                                                <td>
-                                                    <div className="font-bold">{c.name}</div>
-                                                    <div className="text-xs text-secondary">{c.phone || '-'}</div>
-                                                </td>
-                                                <td>
-                                                    {c.health ? (
-                                                        <span className={`badge badge-${c.health.risk_color === 'red' ? 'error' : c.health.risk_color === 'orange' ? 'warning' : 'success'}`}>
-                                                            {c.health.status}
+                                        displayCustomers.map(c => {
+                                            const prodCount = getProductCount(c.id);
+                                            return (
+                                                <tr key={c.id}>
+                                                    <td>
+                                                        <div className="font-bold">{c.name}</div>
+                                                        <div className="text-xs text-secondary">{c.phone || '-'}</div>
+                                                    </td>
+                                                    <td>
+                                                        {c.health ? (
+                                                            <span className={`badge badge-${c.health.risk_color === 'red' ? 'error' : c.health.risk_color === 'orange' ? 'warning' : 'success'}`}>
+                                                                {c.health.status}
+                                                            </span>
+                                                        ) : <span className="badge badge-secondary">New</span>}
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <span style={{
+                                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                            background: 'var(--color-primary-bg)', color: 'var(--color-primary)',
+                                                            fontWeight: '700', borderRadius: '20px', padding: '4px 12px', fontSize: '13px'
+                                                        }}>
+                                                            🛒 {prodCount}
                                                         </span>
-                                                    ) : <span className="badge badge-secondary">New</span>}
-                                                </td>
-                                                <td className="text-sm">
-                                                    {c.stats?.avg_interval ? `Setiap ${c.stats.avg_interval} hari` : '-'}
-                                                </td>
-                                                <td className="text-sm">
-                                                    {c.stats?.days_since_last ? `${c.stats.days_since_last} hari lalu` : '-'}
-                                                </td>
-                                                <td className="font-bold">Rp {c.stats?.total_spent?.toLocaleString('id-ID') || 0}</td>
-                                                <td style={{ textAlign: 'right' }}>
-                                                    {c.health?.status === 'At Risk' && (
-                                                        <button className="btn btn-xs btn-outline-warning mr-xs" onClick={() => alert(`Simulasi: Mengirim Voucher Diskon ke WA ${c.phone}`)}>
-                                                            📩 Kirim Voucher
-                                                        </button>
-                                                    )}
-                                                    <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(c)}>✏️</button>
-                                                </td>
-                                            </tr>
-                                        ))
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <span style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                            fontWeight: '700', color: (c.points || 0) > 0 ? '#f59e0b' : 'var(--color-text-secondary)',
+                                                            fontSize: '14px'
+                                                        }}>
+                                                            ⭐ {c.points || 0}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-sm">
+                                                        {c.stats?.avg_interval ? `Setiap ${c.stats.avg_interval} hari` : '-'}
+                                                    </td>
+                                                    <td className="text-sm">
+                                                        {c.stats?.days_since_last ? `${c.stats.days_since_last} hari lalu` : '-'}
+                                                    </td>
+                                                    <td className="font-bold" style={{ textAlign: 'right' }}>
+                                                        {formatCurrency(c.stats?.total_spent || 0)}
+                                                    </td>
+                                                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                        {(c.points || 0) > 0 && (
+                                                            <button className="btn btn-xs btn-outline" style={{ borderColor: '#f59e0b', color: '#f59e0b', marginRight: '4px' }}
+                                                                onClick={() => openRedeemModal(c)}>
+                                                                🎁 Redeem
+                                                            </button>
+                                                        )}
+                                                        {c.health?.status === 'At Risk' && (
+                                                            <button className="btn btn-xs btn-outline-warning mr-xs" onClick={() => alert(`Simulasi: Mengirim Voucher Diskon ke WA ${c.phone}`)}>
+                                                                📩
+                                                            </button>
+                                                        )}
+                                                        <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(c)}>✏️</button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
@@ -163,6 +211,7 @@ export default function CustomersPage() {
                 </div>
             </main>
 
+            {/* --- ADD/EDIT CUSTOMER MODAL --- */}
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="modal" style={{ width: '100%', maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
@@ -173,41 +222,24 @@ export default function CustomersPage() {
                         <form onSubmit={handleSubmit}>
                             <div className="modal-body">
                                 <div className="form-group mb-md">
-                                    <label className="text-sm text-secondary mb-xs block">Nama Lengkap</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        required
-                                        value={formData.name}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    />
+                                    <label className="text-sm text-secondary mb-xs block">Nama *</label>
+                                    <input type="text" className="input" required value={formData.name}
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })} />
                                 </div>
                                 <div className="form-group mb-md">
-                                    <label className="text-sm text-secondary mb-xs block">Nomor HP (WA) - Opsional</label>
-                                    <input
-                                        type="tel"
-                                        className="input"
-                                        value={formData.phone}
-                                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                    />
+                                    <label className="text-sm text-secondary mb-xs block">Nomor HP (Opsional)</label>
+                                    <input type="tel" className="input" value={formData.phone}
+                                        onChange={e => setFormData({ ...formData, phone: e.target.value })} />
                                 </div>
                                 <div className="form-group mb-md">
                                     <label className="text-sm text-secondary mb-xs block">Email (Opsional)</label>
-                                    <input
-                                        type="email"
-                                        className="input"
-                                        value={formData.email}
-                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                    />
+                                    <input type="email" className="input" value={formData.email}
+                                        onChange={e => setFormData({ ...formData, email: e.target.value })} />
                                 </div>
                                 <div className="form-group mb-md">
-                                    <label className="text-sm text-secondary mb-xs block">Alamat Lengkap</label>
-                                    <textarea
-                                        className="input"
-                                        rows="2"
-                                        value={formData.address}
-                                        onChange={e => setFormData({ ...formData, address: e.target.value })}
-                                    ></textarea>
+                                    <label className="text-sm text-secondary mb-xs block">Alamat (Opsional)</label>
+                                    <textarea className="input" rows="2" value={formData.address}
+                                        onChange={e => setFormData({ ...formData, address: e.target.value })}></textarea>
                                 </div>
                             </div>
                             <div className="modal-footer">
@@ -218,9 +250,63 @@ export default function CustomersPage() {
                     </div>
                 </div>
             )}
+
+            {/* --- REDEEM POINTS MODAL --- */}
+            {showRedeemModal && redeemingCustomer && (
+                <div className="modal-overlay" onClick={() => setShowRedeemModal(false)}>
+                    <div className="modal" style={{ width: '100%', maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div>
+                                <h3 className="modal-title">🎁 Redeem Poin</h3>
+                                <p className="text-sm text-secondary">{redeemingCustomer.name} — ⭐ {redeemingCustomer.points || 0} poin tersedia</p>
+                            </div>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowRedeemModal(false)}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            {rewards.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '30px' }}>
+                                    <div style={{ fontSize: '40px', marginBottom: '8px' }}>🎁</div>
+                                    <p className="text-secondary">Belum ada katalog hadiah. Buat di menu Loyalty & Rewards.</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {rewards.map(r => {
+                                        const canRedeem = (redeemingCustomer.points || 0) >= r.points_cost;
+                                        return (
+                                            <div key={r.id} style={{
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                padding: '12px 16px', borderRadius: '10px',
+                                                background: canRedeem ? 'var(--color-success-bg)' : 'var(--color-bg-secondary)',
+                                                opacity: canRedeem ? 1 : 0.5
+                                            }}>
+                                                <div>
+                                                    <div style={{ fontWeight: '600', fontSize: '14px' }}>{r.name}</div>
+                                                    <div className="text-xs text-secondary">
+                                                        ⭐ {r.points_cost} poin
+                                                        {r.reward_type === 'per_product' && r.required_purchases > 0 && (
+                                                            <span> • Butuh beli {r.required_purchases} produk</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <button className="btn btn-sm btn-primary" disabled={!canRedeem}
+                                                    onClick={() => {
+                                                        if (confirm(`Redeem "${r.name}" untuk ${r.points_cost} poin?`)) {
+                                                            handleRedeem(r.id, r.points_cost);
+                                                        }
+                                                    }}>
+                                                    {canRedeem ? 'Redeem' : 'Kurang'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
-
 
 export const getServerSideProps = async () => { return { props: {} }; };

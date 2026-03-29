@@ -115,6 +115,21 @@ export function useCustomers(userId, userRole) {
         setCustomers(data);
     }
 
+    async function deductPoints(customerId, pointsToDeduct, reason = 'Redeem Hadiah') {
+        const customer = customers.find(c => c.id === customerId);
+        if (!customer) throw new Error('Pelanggan tidak ditemukan');
+        if ((customer.points || 0) < pointsToDeduct) throw new Error('Poin tidak cukup');
+
+        const newPoints = (customer.points || 0) - pointsToDeduct;
+        const { error } = await supabase
+            .from('customers')
+            .update({ points: newPoints })
+            .eq('id', customerId);
+
+        if (error) throw error;
+        await loadCustomers();
+    }
+
     return {
         customers,
         loading,
@@ -122,6 +137,7 @@ export function useCustomers(userId, userRole) {
         updateCustomer,
         deleteCustomer,
         searchCustomers,
+        deductPoints,
         reload: loadCustomers
     };
 }
