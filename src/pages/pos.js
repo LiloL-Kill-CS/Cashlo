@@ -19,7 +19,7 @@ import { useCustomers } from '@/hooks/useCustomers';
 export default function POSPage() {
     const { user, loading: authLoading } = useAuth();
     const { products, categories, loading: productsLoading } = useProducts((user?.owner_id || user?.id), user?.role);
-    const { customers, searchCustomers } = useCustomers((user?.owner_id || user?.id), user?.role);
+    const { customers, searchCustomers, addCustomer } = useCustomers((user?.owner_id || user?.id), user?.role);
     const {
         items, addItem, updateQuantity, removeItem, clearCart, setCartItems,
         subtotal, totalCost, totalProfit, itemCount
@@ -47,6 +47,9 @@ export default function POSPage() {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [lastTransaction, setLastTransaction] = useState(null);
     const [isCartExpanded, setIsCartExpanded] = useState(false);
+
+    const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
+    const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', address: '' });
 
     // Cart auto-expand on mobile
     useEffect(() => {
@@ -114,6 +117,25 @@ export default function POSPage() {
         }
     };
 
+    const handleAddCustomerSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const cleanData = {
+                name: newCustomer.name,
+                phone: newCustomer.phone ? newCustomer.phone.trim() || null : null,
+                email: newCustomer.email ? newCustomer.email.trim() : null,
+                address: newCustomer.address ? newCustomer.address.trim() : null
+            };
+            const added = await addCustomer(cleanData);
+            setSelectedCustomer(added);
+            setShowCustomerModal(false);
+            setShowAddCustomerForm(false);
+            setNewCustomer({ name: '', phone: '', email: '', address: '' });
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
     const handleModifierConfirm = (selectedModifiers) => {
         if (selectedProduct) {
             // Calculate modifier price and cost additions
@@ -156,6 +178,9 @@ export default function POSPage() {
     const handleCustomerSelect = (customer) => {
         setSelectedCustomer(customer);
         setShowCustomerModal(false);
+        setCustomerQuery('');
+        setShowAddCustomerForm(false);
+        setNewCustomer({ name: '', phone: '', email: '', address: '' });
     };
 
     const handlePaymentConfirm = async ({ paymentMethod, cashReceived, pointsRedeemed }) => {
@@ -302,41 +327,76 @@ export default function POSPage() {
             )}
 
             {showCustomerModal && (
-                <div className="modal-overlay" onClick={() => setShowCustomerModal(false)}>
+                <div className="modal-overlay" onClick={() => { setShowCustomerModal(false); setShowAddCustomerForm(false); }}>
                     <div className="modal" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Pilih Pelanggan</h3>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setShowCustomerModal(false)}>✕</button>
+                            <h3>{showAddCustomerForm ? 'Pelanggan Baru' : 'Pilih Pelanggan'}</h3>
+                            <button className="btn btn-ghost btn-icon" onClick={() => { setShowCustomerModal(false); setShowAddCustomerForm(false); }}>✕</button>
                         </div>
-                        <div className="modal-body">
-                            <input
-                                type="text"
-                                className="input mb-md"
-                                placeholder="Cari nama atau no. HP..."
-                                value={customerQuery}
-                                onChange={e => setCustomerQuery(e.target.value)}
-                                autoFocus
-                            />
-                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                {customers.map(c => (
-                                    <div
-                                        key={c.id}
-                                        className="p-md border-bottom cursor-pointer hover:bg-tertiary"
-                                        onClick={() => handleCustomerSelect(c)}
-                                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid var(--color-border)', cursor: 'pointer' }}
-                                    >
-                                        <div>
-                                            <div style={{ fontWeight: 'bold' }}>{c.name}</div>
-                                            <div className="text-secondary text-xs">{c.phone}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="badge badge-primary">{c.points} pts</div>
-                                            <div className="text-xs text-secondary mt-xs">{c.membership_tiers?.name}</div>
-                                        </div>
+                        {showAddCustomerForm ? (
+                            <form onSubmit={handleAddCustomerSubmit}>
+                                <div className="modal-body">
+                                    <div className="form-group mb-md">
+                                        <label className="text-sm text-secondary mb-xs block">Nama *</label>
+                                        <input type="text" className="input" required value={newCustomer.name}
+                                            onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })} autoFocus />
                                     </div>
-                                ))}
+                                    <div className="form-group mb-md">
+                                        <label className="text-sm text-secondary mb-xs block">Nomor HP (Opsional)</label>
+                                        <input type="tel" className="input" value={newCustomer.phone}
+                                            onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} />
+                                    </div>
+                                    <div className="form-group mb-md">
+                                        <label className="text-sm text-secondary mb-xs block">Email (Opsional)</label>
+                                        <input type="email" className="input" value={newCustomer.email}
+                                            onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })} />
+                                    </div>
+                                    <div className="form-group mb-md">
+                                        <label className="text-sm text-secondary mb-xs block">Alamat (Opsional)</label>
+                                        <textarea className="input" value={newCustomer.address}
+                                            onChange={e => setNewCustomer({ ...newCustomer, address: e.target.value })} rows="2"></textarea>
+                                    </div>
+                                </div>
+                                <div className="modal-footer" style={{ display: 'flex', gap: '8px' }}>
+                                    <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setShowAddCustomerForm(false)}>Batal</button>
+                                    <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Simpan</button>
+                                </div>
+                            </form>
+                        ) : (
+                            <div className="modal-body">
+                                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="Cari nama atau no. HP..."
+                                        value={customerQuery}
+                                        onChange={e => setCustomerQuery(e.target.value)}
+                                        style={{ flex: 1 }}
+                                        autoFocus
+                                    />
+                                    <button className="btn btn-primary" onClick={() => setShowAddCustomerForm(true)}>+ Baru</button>
+                                </div>
+                                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                    {customers.map(c => (
+                                        <div
+                                            key={c.id}
+                                            className="p-md border-bottom cursor-pointer hover:bg-tertiary"
+                                            onClick={() => handleCustomerSelect(c)}
+                                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid var(--color-border)', cursor: 'pointer' }}
+                                        >
+                                            <div>
+                                                <div style={{ fontWeight: 'bold' }}>{c.name}</div>
+                                                <div className="text-secondary text-xs">{c.phone}</div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="badge badge-primary">{c.points} pts</div>
+                                                <div className="text-xs text-secondary mt-xs">{c.membership_tiers?.name}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             )}

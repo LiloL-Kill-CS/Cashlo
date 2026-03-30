@@ -39,9 +39,9 @@ export default function CustomersPage() {
             // Convert empty optional fields to null to avoid unique constraint errors
             const cleanData = {
                 name: formData.name,
-                phone: formData.phone?.trim() || null,
-                email: formData.email?.trim() || null,
-                address: formData.address?.trim() || null
+                phone: formData.phone ? formData.phone.trim() || null : null,
+                email: formData.email ? formData.email.trim() : null,
+                address: formData.address ? formData.address.trim() : null
             };
             if (editingCustomer) await updateCustomer(editingCustomer.id, cleanData);
             else await addCustomer(cleanData);
