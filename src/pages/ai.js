@@ -10,24 +10,52 @@ const SUGGESTED_PROMPTS = [
     { icon: '📦', text: 'Produk apa yang perlu di-restock?', desc: 'Inventory check' },
 ];
 
+const STORAGE_KEY = 'cashlo_ai_conversations';
+const MAX_CONTEXT_MESSAGES = 20; // Send last 20 messages as context
+
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
 function formatMessageContent(text) {
     if (!text) return '';
-    // Bold
     let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // Bullet points
     formatted = formatted.replace(/^[•\-]\s(.+)$/gm, '<div style="display:flex;gap:8px;margin:2px 0"><span style="color:var(--color-text-muted)">•</span><span>$1</span></div>');
-    // Line breaks
     formatted = formatted.replace(/\n/g, '<br/>');
     return formatted;
 }
 
+function generateTitle(text) {
+    if (!text) return 'Chat baru';
+    return text.length > 40 ? text.slice(0, 40) + '...' : text;
+}
+
+function loadConversations() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+
+function saveConversations(convos) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(convos));
+    } catch { /* quota exceeded — silently fail */ }
+}
+
 export default function AIPage() {
     const { user, loading: authLoading } = useAuth();
+
+    // Conversations state
+    const [conversations, setConversations] = useState([]);
+    const [activeConvoId, setActiveConvoId] = useState(null);
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [attachments, setAttachments] = useState([]); // { type, name, preview, data }
+    const [attachments, setAttachments] = useState([]);
     const [dragActive, setDragActive] = useState(false);
+    const [historySidebarOpen, setHistorySidebarOpen] = useState(true);
+
     const messagesEndRef = useRef(null);
     const textareaRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -47,21 +75,29 @@ export default function AIPage() {
         return '📎';
     };
 
+    // ─── Load conversations from localStorage on mount ───
+    useEffect(() => {
+        if (!authLoading && user) {
+            const saved = loadConversations();
+            setConversations(saved);
+        }
+    }, [authLoading, user]);
+
+    // ─── Auth redirect ───
     useEffect(() => {
         if (!authLoading && !user) {
             window.location.href = '/';
         }
     }, [user, authLoading]);
 
+    // ─── Auto-scroll ───
     const scrollToBottom = useCallback(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, []);
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages, scrollToBottom]);
+    useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
-    // Auto-resize textarea
+    // ─── Auto-resize textarea ───
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
@@ -69,6 +105,52 @@ export default function AIPage() {
         }
     }, [input]);
 
+    // ─── Persist messages to conversation ───
+    const persistConversation = useCallback((convoId, msgs) => {
+        setConversations(prev => {
+            const updated = prev.map(c =>
+                c.id === convoId
+                    ? { ...c, messages: msgs, updatedAt: new Date().toISOString() }
+                    : c
+            );
+            saveConversations(updated);
+            return updated;
+        });
+    }, []);
+
+    // ─── Conversation management ───
+    const startNewChat = () => {
+        setActiveConvoId(null);
+        setMessages([]);
+        setInput('');
+        setAttachments([]);
+        textareaRef.current?.focus();
+    };
+
+    const loadConversation = (convo) => {
+        setActiveConvoId(convo.id);
+        // Restore messages with Date objects for timestamps
+        setMessages(convo.messages.map(m => ({
+            ...m,
+            timestamp: new Date(m.timestamp)
+        })));
+        setAttachments([]);
+    };
+
+    const deleteConversation = (e, convoId) => {
+        e.stopPropagation();
+        setConversations(prev => {
+            const updated = prev.filter(c => c.id !== convoId);
+            saveConversations(updated);
+            return updated;
+        });
+        if (activeConvoId === convoId) {
+            setActiveConvoId(null);
+            setMessages([]);
+        }
+    };
+
+    // ─── File handling ───
     const compressImage = (file) => {
         return new Promise((resolve) => {
             const canvas = document.createElement('canvas');
@@ -105,16 +187,12 @@ export default function AIPage() {
     const handleFileUpload = async (files) => {
         if (!files || files.length === 0) return;
         const newAttachments = [];
-
         for (const file of Array.from(files)) {
             const ext = file.name.split('.').pop()?.toLowerCase();
-
             if (IMAGE_TYPES.includes(file.type)) {
-                // Image → compress and base64
                 const base64 = await compressImage(file);
                 newAttachments.push({ type: 'image', name: file.name, preview: base64, data: base64 });
             } else if (TEXT_EXTENSIONS.includes(ext) || file.type.startsWith('text/')) {
-                // Text-based file → read content
                 try {
                     const text = await readFileAsText(file);
                     const truncated = text.length > 15000 ? text.slice(0, 15000) + '\n... (truncated)' : text;
@@ -123,11 +201,9 @@ export default function AIPage() {
                     newAttachments.push({ type: 'unsupported', name: file.name, preview: null, data: null });
                 }
             } else {
-                // Binary/unsupported → just show name
                 newAttachments.push({ type: 'unsupported', name: file.name, preview: null, data: null });
             }
         }
-
         setAttachments(prev => [...prev, ...newAttachments]);
     };
 
@@ -141,21 +217,41 @@ export default function AIPage() {
         setAttachments(prev => prev.filter((_, i) => i !== idx));
     };
 
+    // ─── Send message with context window ───
     const sendMessage = async (overrideText) => {
         const text = overrideText || input.trim();
         if ((!text && attachments.length === 0) || loading) return;
 
         const currentAttachments = [...attachments];
 
-        // Build user message for display
         const userMessage = {
             role: 'user',
             content: text,
-            attachments: currentAttachments,
-            timestamp: new Date()
+            attachments: currentAttachments.map(a => ({ type: a.type, name: a.name, preview: a.type === 'image' ? a.preview : null })),
+            timestamp: new Date().toISOString()
         };
 
-        setMessages(prev => [...prev, userMessage]);
+        // Create or use existing conversation
+        let convoId = activeConvoId;
+        if (!convoId) {
+            convoId = generateId();
+            const newConvo = {
+                id: convoId,
+                title: generateTitle(text),
+                messages: [],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            setConversations(prev => {
+                const updated = [newConvo, ...prev];
+                saveConversations(updated);
+                return updated;
+            });
+            setActiveConvoId(convoId);
+        }
+
+        const updatedMessages = [...messages, { ...userMessage, timestamp: new Date() }];
+        setMessages(updatedMessages);
         setInput('');
         setAttachments([]);
         setLoading(true);
@@ -164,10 +260,9 @@ export default function AIPage() {
             textareaRef.current.style.height = 'auto';
         }
 
-        // Build message for AI — append file content as context
+        // Build full message with file content
         let fullMessage = text || '';
         const imageData = currentAttachments.find(a => a.type === 'image')?.data;
-
         for (const att of currentAttachments) {
             if (att.type === 'text' && att.data) {
                 fullMessage += `\n\n📎 File: ${att.name}\n\`\`\`\n${att.data}\n\`\`\``;
@@ -176,6 +271,14 @@ export default function AIPage() {
             }
         }
 
+        // Build context window — last N messages for AI
+        const contextMessages = messages.slice(-MAX_CONTEXT_MESSAGES).map(m => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            content: m.content || ''
+        }));
+        // Add current user message
+        contextMessages.push({ role: 'user', content: fullMessage });
+
         try {
             const response = await fetch('/api/ai-chat', {
                 method: 'POST',
@@ -183,23 +286,38 @@ export default function AIPage() {
                 body: JSON.stringify({
                     message: fullMessage,
                     userId: user?.id || user?.owner_id,
-                    image: imageData || undefined
+                    image: imageData || undefined,
+                    contextMessages: contextMessages
                 })
             });
 
             const data = await response.json();
-
-            setMessages(prev => [...prev, {
+            const aiMsg = {
                 role: 'assistant',
                 content: data.error ? `Error: ${data.error}` : data.response,
                 timestamp: new Date()
-            }]);
+            };
+
+            const finalMessages = [...updatedMessages, aiMsg];
+            setMessages(finalMessages);
+
+            // Persist to localStorage (strip image data to save space)
+            const persistMsgs = finalMessages.map(m => ({
+                role: m.role,
+                content: m.content,
+                attachments: m.attachments?.map(a => ({ type: a.type, name: a.name })),
+                timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp
+            }));
+            persistConversation(convoId, persistMsgs);
+
         } catch {
-            setMessages(prev => [...prev, {
+            const errMsg = {
                 role: 'assistant',
                 content: 'Maaf, terjadi kesalahan koneksi. Coba lagi.',
                 timestamp: new Date()
-            }]);
+            };
+            const finalMessages = [...updatedMessages, errMsg];
+            setMessages(finalMessages);
         } finally {
             setLoading(false);
         }
@@ -212,13 +330,24 @@ export default function AIPage() {
         }
     };
 
-    const clearChat = () => {
-        setMessages([]);
-    };
-
     if (authLoading) return null;
 
     const hasMessages = messages.length > 0;
+
+    // Group conversations by date
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const groupedConvos = {
+        today: conversations.filter(c => new Date(c.updatedAt).toDateString() === today.toDateString()),
+        yesterday: conversations.filter(c => new Date(c.updatedAt).toDateString() === yesterday.toDateString()),
+        week: conversations.filter(c => {
+            const d = new Date(c.updatedAt);
+            return d > weekAgo && d.toDateString() !== today.toDateString() && d.toDateString() !== yesterday.toDateString();
+        }),
+        older: conversations.filter(c => new Date(c.updatedAt) <= weekAgo)
+    };
 
     return (
         <div className="app-container">
@@ -229,204 +358,330 @@ export default function AIPage() {
             <Sidebar activePage="ai" userRole={user?.role} />
 
             <main className="main-content ai-page">
-                {/* Chat Area */}
-                <div className="ai-chat-area"
-                    onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-                    onDragLeave={() => setDragActive(false)}
-                    onDrop={handleDrop}
-                >
-                    {/* Drag overlay */}
-                    {dragActive && (
-                        <div className="ai-drag-overlay">
-                            <div className="ai-drag-content">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="17 8 12 3 7 8" />
-                                    <line x1="12" y1="3" x2="12" y2="15" />
-                                </svg>
-                                <span>Drop file di sini</span>
-                            </div>
-                        </div>
-                    )}
+                {/* ─── History Sidebar ─── */}
+                <div className={`ai-history-sidebar ${historySidebarOpen ? 'open' : ''}`}>
+                    <div className="ai-history-header">
+                        <button className="ai-new-chat-btn" onClick={startNewChat}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            Chat Baru
+                        </button>
+                        <button className="ai-history-toggle" onClick={() => setHistorySidebarOpen(false)} title="Tutup sidebar">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <line x1="9" y1="3" x2="9" y2="21" />
+                            </svg>
+                        </button>
+                    </div>
 
-                    {/* Welcome Screen */}
-                    {!hasMessages && (
-                        <div className="ai-welcome">
-                            <div className="ai-logo-container">
-                                <div className="ai-logo">
-                                    <span className="ai-logo-letter">C</span>
-                                    <div className="ai-logo-sparkle ai-sparkle-1">✦</div>
-                                    <div className="ai-logo-sparkle ai-sparkle-2">✦</div>
-                                    <div className="ai-logo-sparkle ai-sparkle-3">✦</div>
-                                </div>
-                            </div>
-                            <h1 className="ai-welcome-title">Cashlo AI</h1>
-                            <p className="ai-welcome-subtitle">Business Intelligence Assistant powered by Gemma 4</p>
+                    <div className="ai-history-list">
+                        {conversations.length === 0 && (
+                            <div className="ai-history-empty">Belum ada riwayat chat</div>
+                        )}
 
-                            <div className="ai-suggestions">
-                                {SUGGESTED_PROMPTS.map((prompt, idx) => (
+                        {groupedConvos.today.length > 0 && (
+                            <>
+                                <div className="ai-history-section">Hari Ini</div>
+                                {groupedConvos.today.map(c => (
                                     <button
-                                        key={idx}
-                                        className="ai-suggestion-card"
-                                        onClick={() => sendMessage(prompt.text)}
+                                        key={c.id}
+                                        className={`ai-history-item ${activeConvoId === c.id ? 'active' : ''}`}
+                                        onClick={() => loadConversation(c)}
                                     >
-                                        <span className="ai-suggestion-icon">{prompt.icon}</span>
-                                        <div className="ai-suggestion-text">
-                                            <div className="ai-suggestion-title">{prompt.text}</div>
-                                            <div className="ai-suggestion-desc">{prompt.desc}</div>
-                                        </div>
+                                        <span className="ai-history-item-title">{c.title}</span>
+                                        <button className="ai-history-item-delete" onClick={(e) => deleteConversation(e, c.id)}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                            </svg>
+                                        </button>
                                     </button>
                                 ))}
-                            </div>
-                        </div>
-                    )}
+                            </>
+                        )}
 
-                    {/* Messages */}
-                    {hasMessages && (
-                        <div className="ai-messages">
-                            {messages.map((msg, idx) => (
-                                <div key={idx} className={`ai-message ai-message-${msg.role}`}>
-                                    <div className="ai-message-avatar">
-                                        {msg.role === 'assistant' ? (
-                                            <div className="ai-avatar-bot">C</div>
-                                        ) : (
-                                            <div className="ai-avatar-user">
-                                                {user?.username?.[0]?.toUpperCase() || 'U'}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="ai-message-content">
-                                        <div className="ai-message-header">
-                                            <span className="ai-message-name">
-                                                {msg.role === 'assistant' ? 'Cashlo AI' : (user?.username || 'Anda')}
-                                            </span>
-                                            <span className="ai-message-time">
-                                                {msg.timestamp?.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                        </div>
-                                        {msg.attachments && msg.attachments.length > 0 && (
-                                            <div className="ai-message-attachments">
-                                                {msg.attachments.map((att, aidx) => (
-                                                    att.type === 'image' && att.preview ? (
-                                                        <div key={aidx} className="ai-message-image">
-                                                            <img src={att.preview} alt={att.name} />
-                                                        </div>
-                                                    ) : (
-                                                        <div key={aidx} className="ai-file-badge">
-                                                            <span className="ai-file-badge-icon">{getFileIcon(att.name, '')}</span>
-                                                            <span className="ai-file-badge-name">{att.name}</span>
-                                                        </div>
-                                                    )
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div
-                                            className="ai-message-text"
-                                            dangerouslySetInnerHTML={{ __html: formatMessageContent(msg.content) }}
-                                        />
-                                    </div>
-                                </div>
-                            ))}
+                        {groupedConvos.yesterday.length > 0 && (
+                            <>
+                                <div className="ai-history-section">Kemarin</div>
+                                {groupedConvos.yesterday.map(c => (
+                                    <button
+                                        key={c.id}
+                                        className={`ai-history-item ${activeConvoId === c.id ? 'active' : ''}`}
+                                        onClick={() => loadConversation(c)}
+                                    >
+                                        <span className="ai-history-item-title">{c.title}</span>
+                                        <button className="ai-history-item-delete" onClick={(e) => deleteConversation(e, c.id)}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                            </svg>
+                                        </button>
+                                    </button>
+                                ))}
+                            </>
+                        )}
 
-                            {/* AI Typing Indicator */}
-                            {loading && (
-                                <div className="ai-message ai-message-assistant">
-                                    <div className="ai-message-avatar">
-                                        <div className="ai-avatar-bot">C</div>
-                                    </div>
-                                    <div className="ai-message-content">
-                                        <div className="ai-message-header">
-                                            <span className="ai-message-name">Cashlo AI</span>
-                                        </div>
-                                        <div className="ai-typing-indicator">
-                                            <div className="ai-typing-dot"></div>
-                                            <div className="ai-typing-dot"></div>
-                                            <div className="ai-typing-dot"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                        {groupedConvos.week.length > 0 && (
+                            <>
+                                <div className="ai-history-section">7 Hari Terakhir</div>
+                                {groupedConvos.week.map(c => (
+                                    <button
+                                        key={c.id}
+                                        className={`ai-history-item ${activeConvoId === c.id ? 'active' : ''}`}
+                                        onClick={() => loadConversation(c)}
+                                    >
+                                        <span className="ai-history-item-title">{c.title}</span>
+                                        <button className="ai-history-item-delete" onClick={(e) => deleteConversation(e, c.id)}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                            </svg>
+                                        </button>
+                                    </button>
+                                ))}
+                            </>
+                        )}
 
-                            <div ref={messagesEndRef} />
-                        </div>
-                    )}
+                        {groupedConvos.older.length > 0 && (
+                            <>
+                                <div className="ai-history-section">Lebih Lama</div>
+                                {groupedConvos.older.map(c => (
+                                    <button
+                                        key={c.id}
+                                        className={`ai-history-item ${activeConvoId === c.id ? 'active' : ''}`}
+                                        onClick={() => loadConversation(c)}
+                                    >
+                                        <span className="ai-history-item-title">{c.title}</span>
+                                        <button className="ai-history-item-delete" onClick={(e) => deleteConversation(e, c.id)}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                            </svg>
+                                        </button>
+                                    </button>
+                                ))}
+                            </>
+                        )}
+                    </div>
                 </div>
 
-                {/* Input Bar */}
-                <div className="ai-input-wrapper">
-                    <div className="ai-input-container">
-                        {/* File preview bar */}
-                        {attachments.length > 0 && (
-                            <div className="ai-image-preview-bar">
-                                {attachments.map((att, idx) => (
-                                    att.type === 'image' && att.preview ? (
-                                        <div key={idx} className="ai-image-thumb">
-                                            <img src={att.preview} alt={att.name} />
-                                            <button className="ai-image-remove" onClick={() => removeAttachment(idx)}>×</button>
-                                        </div>
-                                    ) : (
-                                        <div key={idx} className="ai-file-preview-chip">
-                                            <span>{getFileIcon(att.name, '')}</span>
-                                            <span className="ai-file-chip-name">{att.name}</span>
-                                            <button className="ai-file-chip-remove" onClick={() => removeAttachment(idx)}>×</button>
-                                        </div>
-                                    )
-                                ))}
+                {/* ─── Main Chat Area ─── */}
+                <div className="ai-main-area">
+                    {/* Top bar with toggle */}
+                    {!historySidebarOpen && (
+                        <div className="ai-topbar">
+                            <button className="ai-history-toggle" onClick={() => setHistorySidebarOpen(true)} title="Buka sidebar">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                                    <line x1="9" y1="3" x2="9" y2="21" />
+                                </svg>
+                            </button>
+                            <button className="ai-new-chat-btn" onClick={startNewChat}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <line x1="12" y1="5" x2="12" y2="19" />
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                </svg>
+                                Chat Baru
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Chat Area */}
+                    <div className="ai-chat-area"
+                        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                        onDragLeave={() => setDragActive(false)}
+                        onDrop={handleDrop}
+                    >
+                        {dragActive && (
+                            <div className="ai-drag-overlay">
+                                <div className="ai-drag-content">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="17 8 12 3 7 8" />
+                                        <line x1="12" y1="3" x2="12" y2="15" />
+                                    </svg>
+                                    <span>Drop file di sini</span>
+                                </div>
                             </div>
                         )}
 
-                        <div className="ai-input-row">
-                            {/* Attachment button */}
-                            <button
-                                className="ai-input-action"
-                                onClick={() => fileInputRef.current?.click()}
-                                title="Upload file (gambar, teks, CSV, JSON, dll)"
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                                </svg>
-                            </button>
+                        {/* Welcome Screen */}
+                        {!hasMessages && (
+                            <div className="ai-welcome">
+                                <div className="ai-logo-container">
+                                    <div className="ai-logo">
+                                        <span className="ai-logo-letter">C</span>
+                                        <div className="ai-logo-sparkle ai-sparkle-1">✦</div>
+                                        <div className="ai-logo-sparkle ai-sparkle-2">✦</div>
+                                        <div className="ai-logo-sparkle ai-sparkle-3">✦</div>
+                                    </div>
+                                </div>
+                                <h1 className="ai-welcome-title">Cashlo AI</h1>
+                                <p className="ai-welcome-subtitle">Business Intelligence Assistant powered by Gemma 4</p>
 
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                multiple
-                                style={{ display: 'none' }}
-                                onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ''; }}
-                            />
+                                <div className="ai-suggestions">
+                                    {SUGGESTED_PROMPTS.map((prompt, idx) => (
+                                        <button
+                                            key={idx}
+                                            className="ai-suggestion-card"
+                                            onClick={() => sendMessage(prompt.text)}
+                                        >
+                                            <span className="ai-suggestion-icon">{prompt.icon}</span>
+                                            <div className="ai-suggestion-text">
+                                                <div className="ai-suggestion-title">{prompt.text}</div>
+                                                <div className="ai-suggestion-desc">{prompt.desc}</div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
-                            {/* Text input */}
-                            <textarea
-                                ref={textareaRef}
-                                className="ai-textarea"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="Tanya tentang bisnis Anda..."
-                                rows={1}
-                                disabled={loading}
-                            />
+                        {/* Messages */}
+                        {hasMessages && (
+                            <div className="ai-messages">
+                                {messages.map((msg, idx) => (
+                                    <div key={idx} className={`ai-message ai-message-${msg.role}`}>
+                                        <div className="ai-message-avatar">
+                                            {msg.role === 'assistant' ? (
+                                                <div className="ai-avatar-bot">C</div>
+                                            ) : (
+                                                <div className="ai-avatar-user">
+                                                    {user?.username?.[0]?.toUpperCase() || 'U'}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="ai-message-content">
+                                            <div className="ai-message-header">
+                                                <span className="ai-message-name">
+                                                    {msg.role === 'assistant' ? 'Cashlo AI' : (user?.username || 'Anda')}
+                                                </span>
+                                                <span className="ai-message-time">
+                                                    {(msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp))
+                                                        .toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                            {msg.attachments && msg.attachments.length > 0 && (
+                                                <div className="ai-message-attachments">
+                                                    {msg.attachments.map((att, aidx) => (
+                                                        att.type === 'image' && att.preview ? (
+                                                            <div key={aidx} className="ai-message-image">
+                                                                <img src={att.preview} alt={att.name} />
+                                                            </div>
+                                                        ) : (
+                                                            <div key={aidx} className="ai-file-badge">
+                                                                <span className="ai-file-badge-icon">{getFileIcon(att.name, '')}</span>
+                                                                <span className="ai-file-badge-name">{att.name}</span>
+                                                            </div>
+                                                        )
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div
+                                                className="ai-message-text"
+                                                dangerouslySetInnerHTML={{ __html: formatMessageContent(msg.content) }}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
 
-                            {/* Send button */}
-                            <button
-                                className={`ai-send-btn ${(input.trim() || attachments.length > 0) && !loading ? 'active' : ''}`}
-                                onClick={() => sendMessage()}
-                                disabled={loading || (!input.trim() && attachments.length === 0)}
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="22" y1="2" x2="11" y2="13" />
-                                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                                </svg>
-                            </button>
-                        </div>
+                                {loading && (
+                                    <div className="ai-message ai-message-assistant">
+                                        <div className="ai-message-avatar">
+                                            <div className="ai-avatar-bot">C</div>
+                                        </div>
+                                        <div className="ai-message-content">
+                                            <div className="ai-message-header">
+                                                <span className="ai-message-name">Cashlo AI</span>
+                                            </div>
+                                            <div className="ai-typing-indicator">
+                                                <div className="ai-typing-dot"></div>
+                                                <div className="ai-typing-dot"></div>
+                                                <div className="ai-typing-dot"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
-                        <div className="ai-input-footer">
-                            <span>Gemma 4 · Google Open Source AI</span>
-                            {hasMessages && (
-                                <button className="ai-clear-btn" onClick={clearChat}>
-                                    Hapus percakapan
-                                </button>
+                                <div ref={messagesEndRef} />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Input Bar */}
+                    <div className="ai-input-wrapper">
+                        <div className="ai-input-container">
+                            {attachments.length > 0 && (
+                                <div className="ai-image-preview-bar">
+                                    {attachments.map((att, idx) => (
+                                        att.type === 'image' && att.preview ? (
+                                            <div key={idx} className="ai-image-thumb">
+                                                <img src={att.preview} alt={att.name} />
+                                                <button className="ai-image-remove" onClick={() => removeAttachment(idx)}>×</button>
+                                            </div>
+                                        ) : (
+                                            <div key={idx} className="ai-file-preview-chip">
+                                                <span>{getFileIcon(att.name, '')}</span>
+                                                <span className="ai-file-chip-name">{att.name}</span>
+                                                <button className="ai-file-chip-remove" onClick={() => removeAttachment(idx)}>×</button>
+                                            </div>
+                                        )
+                                    ))}
+                                </div>
                             )}
+
+                            <div className="ai-input-row">
+                                <button
+                                    className="ai-input-action"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    title="Upload file (gambar, teks, CSV, JSON, dll)"
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                                    </svg>
+                                </button>
+
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ''; }}
+                                />
+
+                                <textarea
+                                    ref={textareaRef}
+                                    className="ai-textarea"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="Tanya tentang bisnis Anda..."
+                                    rows={1}
+                                    disabled={loading}
+                                />
+
+                                <button
+                                    className={`ai-send-btn ${(input.trim() || attachments.length > 0) && !loading ? 'active' : ''}`}
+                                    onClick={() => sendMessage()}
+                                    disabled={loading || (!input.trim() && attachments.length === 0)}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="22" y1="2" x2="11" y2="13" />
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="ai-input-footer">
+                                <span>Gemma 4 · Context: {messages.length} pesan</span>
+                                {hasMessages && (
+                                    <button className="ai-clear-btn" onClick={startNewChat}>
+                                        Chat baru
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

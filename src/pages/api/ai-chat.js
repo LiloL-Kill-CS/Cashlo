@@ -11,7 +11,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { message, userId, image } = req.body;
+    const { message, userId, image, contextMessages } = req.body;
 
     if ((!message && !image) || !userId) {
         return res.status(400).json({ error: 'Message or image, and userId required' });
@@ -30,8 +30,8 @@ export default async function handler(req, res) {
         // Build prompt with business context
         const systemPrompt = buildSystemPrompt(businessContext);
 
-        // Call Gemma 4 API with optional image
-        const aiResponse = await callGemma4API(systemPrompt, message, image);
+        // Call Gemma 4 API with optional image and context
+        const aiResponse = await callGemma4API(systemPrompt, message, image, contextMessages);
 
         return res.status(200).json({ response: aiResponse });
     } catch (error) {
@@ -245,7 +245,7 @@ PENTING:
 - Gunakan kemampuan ini untuk membantu operasional user secara langsung.`;
 }
 
-async function callGemma4API(systemPrompt, userMessage, imageBase64) {
+async function callGemma4API(systemPrompt, userMessage, imageBase64, contextMessages) {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
 
     if (!apiKey) {
@@ -272,10 +272,20 @@ async function callGemma4API(systemPrompt, userMessage, imageBase64) {
                 },
                 body: JSON.stringify({
                     model: model,
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: userMessage }
-                    ],
+                    // Build messages array with context
+                    messages: (() => {
+                        const msgs = [{ role: 'system', content: systemPrompt }];
+                        if (contextMessages && contextMessages.length > 0) {
+                            // Use full context window
+                            for (const cm of contextMessages) {
+                                msgs.push({ role: cm.role, content: cm.content || '' });
+                            }
+                        } else {
+                            // Single message fallback
+                            msgs.push({ role: 'user', content: userMessage });
+                        }
+                        return msgs;
+                    })(),
                     max_tokens: 1024,
                     temperature: 0.7
                 })
