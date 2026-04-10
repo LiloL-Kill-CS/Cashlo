@@ -30,8 +30,8 @@ export default async function handler(req, res) {
         // Build prompt with business context
         const systemPrompt = buildSystemPrompt(businessContext);
 
-        // Call Hugging Face API (FREE)
-        const aiResponse = await callHuggingFaceAPI(systemPrompt, message);
+        // Call Hugging Face API with Gemma 4 (FREE)
+        const aiResponse = await callGemma4API(systemPrompt, message);
 
         return res.status(200).json({ response: aiResponse });
     } catch (error) {
@@ -245,7 +245,7 @@ PENTING:
 - Gunakan kemampuan ini untuk membantu operasional user secara langsung.`;
 }
 
-async function callHuggingFaceAPI(systemPrompt, userMessage) {
+async function callGemma4API(systemPrompt, userMessage) {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
 
     if (!apiKey) {
@@ -253,7 +253,8 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
         return generateFallbackResponse(userMessage);
     }
 
-    // Use HuggingFace Router with OpenAI-compatible endpoint (free)
+    // Use HuggingFace Router with Google Gemma 4 (Apache 2.0, FREE)
+    // Gemma 4 26B A4B: MoE model, 256K context, 140+ languages, multimodal
     const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -261,7 +262,7 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
             'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: 'Qwen/Qwen2.5-Coder-32B-Instruct',
+            model: 'google/gemma-4-26b-a4b-it',
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userMessage }
@@ -281,7 +282,7 @@ async function callHuggingFaceAPI(systemPrompt, userMessage) {
         if (data.error.includes && data.error.includes('rate limit')) {
             return '⚠️ Rate limit tercapai, coba lagi dalam beberapa menit...';
         }
-        throw new Error(data.error.message || data.error || 'Hugging Face API error');
+        throw new Error(data.error.message || data.error || 'Gemma 4 API error');
     }
 
     // OpenAI-compatible response format

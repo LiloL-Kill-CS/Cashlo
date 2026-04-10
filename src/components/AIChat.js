@@ -112,7 +112,7 @@ export default function AIChat({ userId }) {
                             <span style={{ fontSize: '24px' }}>🤖</span>
                             <div>
                                 <div style={{ fontWeight: 'bold' }}>AI Business Assistant</div>
-                                <div style={{ fontSize: '12px', opacity: 0.9 }}>Powered by Gemini</div>
+                                <div style={{ fontSize: '12px', opacity: 0.9 }}>Powered by Gemma 4 🚀</div>
                             </div>
                         </div>
                     </div>
