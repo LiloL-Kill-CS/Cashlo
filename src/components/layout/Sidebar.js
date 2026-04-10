@@ -28,6 +28,17 @@ export default function Sidebar({ activePage, userRole }) {
                 </a>
 
                 <a
+                    href="/ai"
+                    className={`sidebar-link ${activePage === 'ai' ? 'active' : ''}`}
+                    title="Cashlo AI"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2L9 7l-5 1 3.5 3.5L7 17l5-2.5L17 17l-.5-5.5L20 8l-5-1z"></path>
+                        <circle cx="12" cy="12" r="2"></circle>
+                    </svg>
+                </a>
+
+                <a
                     href="/reports"
                     className={`sidebar-link ${activePage === 'reports' ? 'active' : ''}`}
                     title="Laporan"

@@ -11,10 +11,10 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { message, userId } = req.body; // Trusted from frontend in this architecture
+    const { message, userId, image } = req.body;
 
-    if (!message || !userId) {
-        return res.status(400).json({ error: 'Message and userId required' });
+    if ((!message && !image) || !userId) {
+        return res.status(400).json({ error: 'Message or image, and userId required' });
     }
 
     // Initialize Supabase with global Anon Key (assuming RLS allows or is handled by manual filters)
@@ -30,8 +30,8 @@ export default async function handler(req, res) {
         // Build prompt with business context
         const systemPrompt = buildSystemPrompt(businessContext);
 
-        // Call Hugging Face API with Gemma 4 (FREE)
-        const aiResponse = await callGemma4API(systemPrompt, message);
+        // Call Gemma 4 API with optional image
+        const aiResponse = await callGemma4API(systemPrompt, message, image);
 
         return res.status(200).json({ response: aiResponse });
     } catch (error) {
@@ -245,7 +245,7 @@ PENTING:
 - Gunakan kemampuan ini untuk membantu operasional user secara langsung.`;
 }
 
-async function callGemma4API(systemPrompt, userMessage) {
+async function callGemma4API(systemPrompt, userMessage, imageBase64) {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
 
     if (!apiKey) {
@@ -276,7 +276,7 @@ async function callGemma4API(systemPrompt, userMessage) {
                         { role: 'system', content: systemPrompt },
                         { role: 'user', content: userMessage }
                     ],
-                    max_tokens: 500,
+                    max_tokens: 1024,
                     temperature: 0.7
                 })
             });

@@ -1,0 +1,40 @@
+⚠ `eslint` configuration in next.config.mjs is no longer supported. See more info here: https://nextjs.org/docs/app/api-reference/cli/next#next-lint-options
+⚠ Invalid next.config.mjs options detected: 
+⚠     Unrecognized key(s) in object: 'eslint'
+⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+▲ Next.js 16.1.2 (Turbopack)
+- Environments: .env.local
+
+  Skipping validation of types
+  Creating an optimized production build ...
+✓ Compiled successfully in 1598.0ms
+  Collecting page data using 15 workers ...
+Warning: You have opted-out of Automatic Static Optimization due to `getInitialProps` in `pages/_app`. This does not opt-out pages with `getStaticProps`
+Read more: https://nextjs.org/docs/messages/opt-out-auto-static-optimization
+
+  Finalizing page optimization ...
+
+Route (pages)
+┌ ƒ /
+├   /_app
+├ ƒ /404
+├ ƒ /api/ai-chat
+├ ƒ /api/hello
+├ ƒ /api/predictive-alerts
+├ ƒ /api/regional-data
+├ ƒ /command
+├ ƒ /customers
+├ ƒ /dashboard
+├ ƒ /hpp
+├ ƒ /hr
+├ ƒ /inventory
+├ ƒ /loyalty
+├ ƒ /pos
+├ ƒ /products
+├ ƒ /provitina
+├ ƒ /purchasing
+├ ƒ /reports
+└ ƒ /settings
+
+ƒ  (Dynamic)  server-rendered on demand
+

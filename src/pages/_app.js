@@ -1,7 +1,6 @@
 import '@/styles/globals.css';
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
-import AIChat from '@/components/AIChat';
 
 function AppContent({ Component, pageProps }) {
   const { user } = useAuth();
@@ -9,7 +8,6 @@ function AppContent({ Component, pageProps }) {
   return (
     <>
       <Component {...pageProps} />
-      {user && <AIChat userId={user.id} />}
     </>
   );
 }
