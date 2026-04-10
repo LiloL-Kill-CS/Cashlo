@@ -184,15 +184,117 @@ export default function AIPage() {
         });
     };
 
+    const readFileAsArrayBuffer = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    };
+
+    // ─── Dynamic library loaders (CDN, on-demand) ───
+    const loadPDFJS = async () => {
+        if (window.pdfjsLib) return window.pdfjsLib;
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            script.onload = () => {
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                resolve(window.pdfjsLib);
+            };
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    };
+
+    const loadSheetJS = async () => {
+        if (window.XLSX) return window.XLSX;
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+            script.onload = () => resolve(window.XLSX);
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    };
+
+    // ─── Extract text from PDF ───
+    const extractPDFText = async (file) => {
+        try {
+            const pdfjsLib = await loadPDFJS();
+            const buffer = await readFileAsArrayBuffer(file);
+            const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+            let fullText = '';
+            const maxPages = Math.min(pdf.numPages, 30); // Limit to 30 pages
+            for (let i = 1; i <= maxPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                const pageText = content.items.map(item => item.str).join(' ');
+                fullText += `--- Halaman ${i} ---\n${pageText}\n\n`;
+            }
+            if (pdf.numPages > 30) {
+                fullText += `\n... (${pdf.numPages - 30} halaman lagi tidak ditampilkan)`;
+            }
+            return fullText.trim();
+        } catch (e) {
+            console.warn('PDF extraction failed:', e);
+            return null;
+        }
+    };
+
+    // ─── Extract text from Excel ───
+    const extractExcelText = async (file) => {
+        try {
+            const XLSX = await loadSheetJS();
+            const buffer = await readFileAsArrayBuffer(file);
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            let fullText = '';
+            for (const sheetName of workbook.SheetNames) {
+                const sheet = workbook.Sheets[sheetName];
+                const csv = XLSX.utils.sheet_to_csv(sheet);
+                fullText += `--- Sheet: ${sheetName} ---\n${csv}\n\n`;
+            }
+            return fullText.trim();
+        } catch (e) {
+            console.warn('Excel extraction failed:', e);
+            return null;
+        }
+    };
+
     const handleFileUpload = async (files) => {
         if (!files || files.length === 0) return;
         const newAttachments = [];
         for (const file of Array.from(files)) {
             const ext = file.name.split('.').pop()?.toLowerCase();
+
             if (IMAGE_TYPES.includes(file.type)) {
+                // Image → compress and base64
                 const base64 = await compressImage(file);
                 newAttachments.push({ type: 'image', name: file.name, preview: base64, data: base64 });
+
+            } else if (ext === 'pdf') {
+                // PDF → extract text with pdf.js
+                const text = await extractPDFText(file);
+                if (text) {
+                    const truncated = text.length > 15000 ? text.slice(0, 15000) + '\n... (truncated)' : text;
+                    newAttachments.push({ type: 'text', name: file.name, preview: null, data: truncated });
+                } else {
+                    newAttachments.push({ type: 'unsupported', name: file.name, preview: null, data: null });
+                }
+
+            } else if (['xlsx', 'xls'].includes(ext)) {
+                // Excel → extract as CSV with SheetJS
+                const text = await extractExcelText(file);
+                if (text) {
+                    const truncated = text.length > 15000 ? text.slice(0, 15000) + '\n... (truncated)' : text;
+                    newAttachments.push({ type: 'text', name: file.name, preview: null, data: truncated });
+                } else {
+                    newAttachments.push({ type: 'unsupported', name: file.name, preview: null, data: null });
+                }
+
             } else if (TEXT_EXTENSIONS.includes(ext) || file.type.startsWith('text/')) {
+                // Plain text files
                 try {
                     const text = await readFileAsText(file);
                     const truncated = text.length > 15000 ? text.slice(0, 15000) + '\n... (truncated)' : text;
@@ -200,7 +302,9 @@ export default function AIPage() {
                 } catch {
                     newAttachments.push({ type: 'unsupported', name: file.name, preview: null, data: null });
                 }
+
             } else {
+                // Truly unsupported
                 newAttachments.push({ type: 'unsupported', name: file.name, preview: null, data: null });
             }
         }
