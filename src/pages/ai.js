@@ -26,12 +26,26 @@ export default function AIPage() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [imagePreview, setImagePreview] = useState(null);
-    const [imageBase64, setImageBase64] = useState(null);
+    const [attachments, setAttachments] = useState([]); // { type, name, preview, data }
     const [dragActive, setDragActive] = useState(false);
     const messagesEndRef = useRef(null);
     const textareaRef = useRef(null);
     const fileInputRef = useRef(null);
+
+    const TEXT_EXTENSIONS = ['txt','csv','json','xml','md','log','js','ts','py','html','css','sql','yml','yaml','ini','env','jsx','tsx','java','c','cpp','h','rb','php','sh','bat','toml','cfg'];
+    const IMAGE_TYPES = ['image/png','image/jpeg','image/gif','image/webp','image/bmp','image/svg+xml'];
+
+    const getFileIcon = (name, type) => {
+        if (IMAGE_TYPES.includes(type)) return '🖼️';
+        const ext = name.split('.').pop()?.toLowerCase();
+        if (['csv','xlsx','xls'].includes(ext)) return '📊';
+        if (['json','xml','yml','yaml'].includes(ext)) return '📋';
+        if (['pdf'].includes(ext)) return '📄';
+        if (['doc','docx','txt','md'].includes(ext)) return '📝';
+        if (['js','ts','py','java','cpp','rb','php','jsx','tsx'].includes(ext)) return '💻';
+        if (['zip','rar','7z','tar','gz'].includes(ext)) return '📦';
+        return '📎';
+    };
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -79,44 +93,87 @@ export default function AIPage() {
         });
     };
 
-    const handleImageUpload = async (file) => {
-        if (!file || !file.type.startsWith('image/')) return;
-        const base64 = await compressImage(file);
-        setImagePreview(base64);
-        setImageBase64(base64);
+    const readFileAsText = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsText(file);
+        });
+    };
+
+    const handleFileUpload = async (files) => {
+        if (!files || files.length === 0) return;
+        const newAttachments = [];
+
+        for (const file of Array.from(files)) {
+            const ext = file.name.split('.').pop()?.toLowerCase();
+
+            if (IMAGE_TYPES.includes(file.type)) {
+                // Image → compress and base64
+                const base64 = await compressImage(file);
+                newAttachments.push({ type: 'image', name: file.name, preview: base64, data: base64 });
+            } else if (TEXT_EXTENSIONS.includes(ext) || file.type.startsWith('text/')) {
+                // Text-based file → read content
+                try {
+                    const text = await readFileAsText(file);
+                    const truncated = text.length > 15000 ? text.slice(0, 15000) + '\n... (truncated)' : text;
+                    newAttachments.push({ type: 'text', name: file.name, preview: null, data: truncated });
+                } catch {
+                    newAttachments.push({ type: 'unsupported', name: file.name, preview: null, data: null });
+                }
+            } else {
+                // Binary/unsupported → just show name
+                newAttachments.push({ type: 'unsupported', name: file.name, preview: null, data: null });
+            }
+        }
+
+        setAttachments(prev => [...prev, ...newAttachments]);
     };
 
     const handleDrop = (e) => {
         e.preventDefault();
         setDragActive(false);
-        const file = e.dataTransfer.files[0];
-        handleImageUpload(file);
+        handleFileUpload(e.dataTransfer.files);
     };
 
-    const removeImage = () => {
-        setImagePreview(null);
-        setImageBase64(null);
+    const removeAttachment = (idx) => {
+        setAttachments(prev => prev.filter((_, i) => i !== idx));
     };
 
     const sendMessage = async (overrideText) => {
         const text = overrideText || input.trim();
-        if ((!text && !imageBase64) || loading) return;
+        if ((!text && attachments.length === 0) || loading) return;
 
+        const currentAttachments = [...attachments];
+
+        // Build user message for display
         const userMessage = {
             role: 'user',
             content: text,
-            image: imagePreview,
+            attachments: currentAttachments,
             timestamp: new Date()
         };
 
         setMessages(prev => [...prev, userMessage]);
         setInput('');
-        setImagePreview(null);
-        setImageBase64(null);
+        setAttachments([]);
         setLoading(true);
 
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
+        }
+
+        // Build message for AI — append file content as context
+        let fullMessage = text || '';
+        const imageData = currentAttachments.find(a => a.type === 'image')?.data;
+
+        for (const att of currentAttachments) {
+            if (att.type === 'text' && att.data) {
+                fullMessage += `\n\n📎 File: ${att.name}\n\`\`\`\n${att.data}\n\`\`\``;
+            } else if (att.type === 'unsupported') {
+                fullMessage += `\n\n📎 File terlampir: ${att.name} (format tidak bisa dibaca langsung)`;
+            }
         }
 
         try {
@@ -124,9 +181,9 @@ export default function AIPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: text,
+                    message: fullMessage,
                     userId: user?.id || user?.owner_id,
-                    image: imageBase64 || undefined
+                    image: imageData || undefined
                 })
             });
 
@@ -187,7 +244,7 @@ export default function AIPage() {
                                     <polyline points="17 8 12 3 7 8" />
                                     <line x1="12" y1="3" x2="12" y2="15" />
                                 </svg>
-                                <span>Drop gambar di sini</span>
+                                <span>Drop file di sini</span>
                             </div>
                         </div>
                     )}
@@ -247,9 +304,20 @@ export default function AIPage() {
                                                 {msg.timestamp?.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </div>
-                                        {msg.image && (
-                                            <div className="ai-message-image">
-                                                <img src={msg.image} alt="Uploaded" />
+                                        {msg.attachments && msg.attachments.length > 0 && (
+                                            <div className="ai-message-attachments">
+                                                {msg.attachments.map((att, aidx) => (
+                                                    att.type === 'image' && att.preview ? (
+                                                        <div key={aidx} className="ai-message-image">
+                                                            <img src={att.preview} alt={att.name} />
+                                                        </div>
+                                                    ) : (
+                                                        <div key={aidx} className="ai-file-badge">
+                                                            <span className="ai-file-badge-icon">{getFileIcon(att.name, '')}</span>
+                                                            <span className="ai-file-badge-name">{att.name}</span>
+                                                        </div>
+                                                    )
+                                                ))}
                                             </div>
                                         )}
                                         <div
@@ -287,13 +355,23 @@ export default function AIPage() {
                 {/* Input Bar */}
                 <div className="ai-input-wrapper">
                     <div className="ai-input-container">
-                        {/* Image preview */}
-                        {imagePreview && (
+                        {/* File preview bar */}
+                        {attachments.length > 0 && (
                             <div className="ai-image-preview-bar">
-                                <div className="ai-image-thumb">
-                                    <img src={imagePreview} alt="Preview" />
-                                    <button className="ai-image-remove" onClick={removeImage}>×</button>
-                                </div>
+                                {attachments.map((att, idx) => (
+                                    att.type === 'image' && att.preview ? (
+                                        <div key={idx} className="ai-image-thumb">
+                                            <img src={att.preview} alt={att.name} />
+                                            <button className="ai-image-remove" onClick={() => removeAttachment(idx)}>×</button>
+                                        </div>
+                                    ) : (
+                                        <div key={idx} className="ai-file-preview-chip">
+                                            <span>{getFileIcon(att.name, '')}</span>
+                                            <span className="ai-file-chip-name">{att.name}</span>
+                                            <button className="ai-file-chip-remove" onClick={() => removeAttachment(idx)}>×</button>
+                                        </div>
+                                    )
+                                ))}
                             </div>
                         )}
 
@@ -302,21 +380,19 @@ export default function AIPage() {
                             <button
                                 className="ai-input-action"
                                 onClick={() => fileInputRef.current?.click()}
-                                title="Upload gambar"
+                                title="Upload file (gambar, teks, CSV, JSON, dll)"
                             >
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                    <circle cx="8.5" cy="8.5" r="1.5" />
-                                    <polyline points="21 15 16 10 5 21" />
+                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                                 </svg>
                             </button>
 
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept="image/*"
+                                multiple
                                 style={{ display: 'none' }}
-                                onChange={(e) => handleImageUpload(e.target.files[0])}
+                                onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ''; }}
                             />
 
                             {/* Text input */}
@@ -333,9 +409,9 @@ export default function AIPage() {
 
                             {/* Send button */}
                             <button
-                                className={`ai-send-btn ${(input.trim() || imageBase64) && !loading ? 'active' : ''}`}
+                                className={`ai-send-btn ${(input.trim() || attachments.length > 0) && !loading ? 'active' : ''}`}
                                 onClick={() => sendMessage()}
-                                disabled={loading || (!input.trim() && !imageBase64)}
+                                disabled={loading || (!input.trim() && attachments.length === 0)}
                             >
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="22" y1="2" x2="11" y2="13" />
