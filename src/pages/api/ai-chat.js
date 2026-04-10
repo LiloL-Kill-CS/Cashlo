@@ -253,53 +253,65 @@ async function callGemma4API(systemPrompt, userMessage) {
         return generateFallbackResponse(userMessage);
     }
 
-    // Use HuggingFace Router with Google Gemma 4 (Apache 2.0, FREE)
-    // Gemma 4 26B A4B: MoE model, 256K context, 140+ languages, multimodal
-    const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-            model: 'google/gemma-4-26b-a4b-it',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage }
-            ],
-            max_tokens: 500,
-            temperature: 0.7
-        })
-    });
+    // Models to try in order (primary → fallback)
+    const models = [
+        'google/gemma-4-12B-it',           // Gemma 4 12B - text optimized
+        'google/gemma-3-27b-it',            // Fallback: Gemma 3 27B
+        'Qwen/Qwen2.5-72B-Instruct',       // Fallback: Qwen 2.5 72B
+    ];
 
-    const data = await response.json();
+    let lastError = null;
 
-    if (data.error) {
-        // Model might be loading, return friendly message
-        if (data.error.includes && data.error.includes('loading')) {
-            return '⏳ Model sedang loading, coba lagi dalam 10-30 detik...';
+    for (const model of models) {
+        try {
+            const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userMessage }
+                    ],
+                    max_tokens: 500,
+                    temperature: 0.7
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                console.warn(`Model ${model} failed:`, data.error);
+                lastError = data.error;
+                continue; // Try next model
+            }
+
+            // OpenAI-compatible response format
+            const content = data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
+
+            // Check for Action Protocol
+            try {
+                if (content.trim().startsWith('{') && content.includes('"action":')) {
+                    const actionRequest = JSON.parse(content);
+                    return await executeAction(actionRequest);
+                }
+            } catch (e) {
+                console.log('Not an action or parsing failed', e);
+            }
+
+            return content;
+        } catch (fetchError) {
+            console.warn(`Model ${model} fetch error:`, fetchError.message);
+            lastError = fetchError.message;
+            continue; // Try next model
         }
-        if (data.error.includes && data.error.includes('rate limit')) {
-            return '⚠️ Rate limit tercapai, coba lagi dalam beberapa menit...';
-        }
-        throw new Error(data.error.message || data.error || 'Gemma 4 API error');
     }
 
-    // OpenAI-compatible response format
-    const content = data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
-
-    // Check for Action Protocol
-    try {
-        if (content.trim().startsWith('{') && content.includes('"action":')) {
-            const actionRequest = JSON.parse(content);
-            return await executeAction(actionRequest);
-        }
-    } catch (e) {
-        // Not a JSON or failed to parse, ensure we return text
-        console.log('Not an action or parsing failed', e);
-    }
-
-    return content;
+    // All models failed
+    throw new Error(lastError || 'All AI models unavailable');
 }
 
 // ============================================
