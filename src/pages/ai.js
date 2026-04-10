@@ -25,7 +25,7 @@ function formatMessageContent(text) {
     return formatted;
 }
 
-function generateTitle(text) {
+function truncateTitle(text) {
     if (!text) return 'Chat baru';
     return text.length > 40 ? text.slice(0, 40) + '...' : text;
 }
@@ -233,11 +233,13 @@ export default function AIPage() {
 
         // Create or use existing conversation
         let convoId = activeConvoId;
+        let isNewConvo = false;
         if (!convoId) {
             convoId = generateId();
+            isNewConvo = true;
             const newConvo = {
                 id: convoId,
-                title: generateTitle(text),
+                title: 'Memuat...',
                 messages: [],
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
@@ -287,7 +289,8 @@ export default function AIPage() {
                     message: fullMessage,
                     userId: user?.id || user?.owner_id,
                     image: imageData || undefined,
-                    contextMessages: contextMessages
+                    contextMessages: contextMessages,
+                    generateTitle: isNewConvo
                 })
             });
 
@@ -300,6 +303,17 @@ export default function AIPage() {
 
             const finalMessages = [...updatedMessages, aiMsg];
             setMessages(finalMessages);
+
+            // Update title if AI generated one
+            if (data.title && isNewConvo) {
+                setConversations(prev => {
+                    const updated = prev.map(c =>
+                        c.id === convoId ? { ...c, title: data.title } : c
+                    );
+                    saveConversations(updated);
+                    return updated;
+                });
+            }
 
             // Persist to localStorage (strip image data to save space)
             const persistMsgs = finalMessages.map(m => ({

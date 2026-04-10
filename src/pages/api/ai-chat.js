@@ -11,7 +11,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { message, userId, image, contextMessages } = req.body;
+    const { message, userId, image, contextMessages, generateTitle } = req.body;
 
     if ((!message && !image) || !userId) {
         return res.status(400).json({ error: 'Message or image, and userId required' });
@@ -33,7 +33,13 @@ export default async function handler(req, res) {
         // Call Gemma 4 API with optional image and context
         const aiResponse = await callGemma4API(systemPrompt, message, image, contextMessages);
 
-        return res.status(200).json({ response: aiResponse });
+        // Generate title if requested (first message of new conversation)
+        let title = undefined;
+        if (generateTitle && message) {
+            title = await generateConversationTitle(message);
+        }
+
+        return res.status(200).json({ response: aiResponse, title });
     } catch (error) {
         console.error('AI Chat Error:', error);
         return res.status(500).json({ error: error.message || 'AI service error' });
@@ -249,21 +255,60 @@ async function callGemma4API(systemPrompt, userMessage, imageBase64, contextMess
     const apiKey = process.env.HUGGINGFACE_API_KEY;
 
     if (!apiKey) {
-        // Fallback response when no API key
         return generateFallbackResponse(userMessage);
     }
 
-    // Models to try in order (primary → fallback)
-    const models = [
-        'google/gemma-4-12B-it',           // Gemma 4 12B - text optimized
-        'google/gemma-3-27b-it',            // Fallback: Gemma 3 27B
-        'Qwen/Qwen2.5-72B-Instruct',       // Fallback: Qwen 2.5 72B
-    ];
+    const hasImage = !!imageBase64;
+
+    // Use vision-capable models when image is present
+    const models = hasImage
+        ? [
+            'google/gemma-3-27b-it',            // Gemma 3 27B - vision capable
+            'meta-llama/Llama-3.2-11B-Vision-Instruct', // Llama vision fallback
+        ]
+        : [
+            'google/gemma-4-12B-it',
+            'google/gemma-3-27b-it',
+            'Qwen/Qwen2.5-72B-Instruct',
+        ];
 
     let lastError = null;
 
     for (const model of models) {
         try {
+            // Build messages array
+            const msgs = [{ role: 'system', content: systemPrompt }];
+
+            if (contextMessages && contextMessages.length > 0) {
+                for (let i = 0; i < contextMessages.length; i++) {
+                    const cm = contextMessages[i];
+                    const isLast = i === contextMessages.length - 1;
+
+                    // Attach image to the LAST user message only
+                    if (isLast && cm.role === 'user' && hasImage) {
+                        msgs.push({
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: cm.content || 'Analisis gambar ini' },
+                                { type: 'image_url', image_url: { url: imageBase64 } }
+                            ]
+                        });
+                    } else {
+                        msgs.push({ role: cm.role, content: cm.content || '' });
+                    }
+                }
+            } else if (hasImage) {
+                msgs.push({
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: userMessage || 'Analisis gambar ini' },
+                        { type: 'image_url', image_url: { url: imageBase64 } }
+                    ]
+                });
+            } else {
+                msgs.push({ role: 'user', content: userMessage });
+            }
+
             const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -272,20 +317,7 @@ async function callGemma4API(systemPrompt, userMessage, imageBase64, contextMess
                 },
                 body: JSON.stringify({
                     model: model,
-                    // Build messages array with context
-                    messages: (() => {
-                        const msgs = [{ role: 'system', content: systemPrompt }];
-                        if (contextMessages && contextMessages.length > 0) {
-                            // Use full context window
-                            for (const cm of contextMessages) {
-                                msgs.push({ role: cm.role, content: cm.content || '' });
-                            }
-                        } else {
-                            // Single message fallback
-                            msgs.push({ role: 'user', content: userMessage });
-                        }
-                        return msgs;
-                    })(),
+                    messages: msgs,
                     max_tokens: 1024,
                     temperature: 0.7
                 })
@@ -296,10 +328,9 @@ async function callGemma4API(systemPrompt, userMessage, imageBase64, contextMess
             if (data.error) {
                 console.warn(`Model ${model} failed:`, data.error);
                 lastError = data.error;
-                continue; // Try next model
+                continue;
             }
 
-            // OpenAI-compatible response format
             const content = data.choices?.[0]?.message?.content || 'Maaf, saya tidak bisa memproses permintaan Anda.';
 
             // Check for Action Protocol
@@ -316,12 +347,47 @@ async function callGemma4API(systemPrompt, userMessage, imageBase64, contextMess
         } catch (fetchError) {
             console.warn(`Model ${model} fetch error:`, fetchError.message);
             lastError = fetchError.message;
-            continue; // Try next model
+            continue;
         }
     }
 
-    // All models failed
     throw new Error(lastError || 'All AI models unavailable');
+}
+
+// Generate a short conversation title from user's first message
+async function generateConversationTitle(userMessage) {
+    const apiKey = process.env.HUGGINGFACE_API_KEY;
+    if (!apiKey) return userMessage.slice(0, 40);
+
+    try {
+        const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: 'google/gemma-4-12B-it',
+                messages: [
+                    { role: 'system', content: 'Kamu adalah pembuat judul percakapan. Berikan HANYA judul singkat 3-6 kata dalam bahasa Indonesia yang mendeskripsikan topik/tujuan dari pertanyaan user. Tanpa tanda kutip, tanpa emoji, tanpa penjelasan. Contoh: Analisis Penjualan Hari Ini, Strategi Meningkatkan Profit, Rekomendasi Restock Produk' },
+                    { role: 'user', content: userMessage }
+                ],
+                max_tokens: 20,
+                temperature: 0.3
+            })
+        });
+
+        const data = await response.json();
+        const title = data.choices?.[0]?.message?.content?.trim();
+        if (title && title.length > 0 && title.length < 60) {
+            return title.replace(/^["']|["']$/g, ''); // Remove quotes if any
+        }
+    } catch (e) {
+        console.warn('Title generation failed:', e.message);
+    }
+
+    // Fallback: use first words
+    return userMessage.length > 40 ? userMessage.slice(0, 40) + '...' : userMessage;
 }
 
 // ============================================
