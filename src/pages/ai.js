@@ -5,10 +5,28 @@ import { useAuth } from '@/hooks/useAuth';
 
 const SUGGESTED_PROMPTS = [
     { icon: '📊', text: 'Bagaimana performa bisnis hari ini?', desc: 'Analisis real-time' },
-    { icon: '📈', text: 'Produk apa yang paling laris minggu ini?', desc: 'Tren penjualan' },
-    { icon: '💡', text: 'Beri saran strategi untuk meningkatkan profit', desc: 'Business strategy' },
-    { icon: '📦', text: 'Produk apa yang perlu di-restock?', desc: 'Inventory check' },
+    { icon: '📈', text: 'Produk apa yang paling laris bulan ini?', desc: 'Tren penjualan' },
+    { icon: '💡', text: 'Produk mana yang perlu dinaikkan harganya?', desc: 'Pricing strategy' },
+    { icon: '📦', text: 'Cek stok yang menipis dan buat restock otomatis', desc: 'Agent autonomous' },
 ];
+
+const TOOL_LABELS = {
+    get_sales_today: { icon: '📊', label: 'Data Penjualan Hari Ini' },
+    get_sales_period: { icon: '📅', label: 'Data Penjualan Periode' },
+    get_top_products: { icon: '🏆', label: 'Produk Terlaris' },
+    get_low_stock: { icon: '📦', label: 'Stok Menipis' },
+    get_all_products: { icon: '🛍️', label: 'Daftar Produk' },
+    get_product_detail: { icon: '🔍', label: 'Detail Produk' },
+    get_customers: { icon: '👥', label: 'Data Pelanggan' },
+    get_expenses: { icon: '💰', label: 'Data Pengeluaran' },
+    get_supplies: { icon: '🏭', label: 'Data Supply' },
+    update_product_price: { icon: '✏️', label: 'Update Harga Produk' },
+    update_stock: { icon: '📦', label: 'Update Stok' },
+    add_product: { icon: '➕', label: 'Tambah Produk' },
+    add_expense: { icon: '💸', label: 'Catat Pengeluaran' },
+    add_customer: { icon: '👤', label: 'Daftarkan Pelanggan' },
+    add_supply: { icon: '🏭', label: 'Tambah Supply' },
+};
 
 const STORAGE_KEY = 'cashlo_ai_conversations';
 const MAX_CONTEXT_MESSAGES = 20; // Send last 20 messages as context
@@ -55,6 +73,7 @@ export default function AIPage() {
     const [attachments, setAttachments] = useState([]);
     const [dragActive, setDragActive] = useState(false);
     const [historySidebarOpen, setHistorySidebarOpen] = useState(true);
+    const [agentStatus, setAgentStatus] = useState(null); // 'thinking' | 'tools' | null
 
     const messagesEndRef = useRef(null);
     const textareaRef = useRef(null);
@@ -386,15 +405,16 @@ export default function AIPage() {
         contextMessages.push({ role: 'user', content: fullMessage });
 
         try {
-            const response = await fetch('/api/ai-chat', {
+            setAgentStatus('thinking');
+
+            // Use Agent API with tool-calling loop
+            const response = await fetch('/api/ai-agent', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: fullMessage,
                     userId: user?.id || user?.owner_id,
-                    image: imageData || undefined,
-                    contextMessages: contextMessages,
-                    generateTitle: isNewConvo
+                    contextMessages: contextMessages
                 })
             });
 
@@ -402,27 +422,56 @@ export default function AIPage() {
             const aiMsg = {
                 role: 'assistant',
                 content: data.error ? `Error: ${data.error}` : data.response,
+                toolsUsed: data.toolsUsed || [],
+                pendingActions: data.pendingActions || [],
                 timestamp: new Date()
             };
 
             const finalMessages = [...updatedMessages, aiMsg];
             setMessages(finalMessages);
 
-            // Update title if AI generated one
-            if (data.title && isNewConvo) {
-                setConversations(prev => {
-                    const updated = prev.map(c =>
-                        c.id === convoId ? { ...c, title: data.title } : c
-                    );
-                    saveConversations(updated);
-                    return updated;
-                });
+            // Generate title for new conversations from the first message
+            if (isNewConvo && text) {
+                const titleText = text.length > 40 ? text.slice(0, 40) + '...' : text;
+                // Try to generate a smart title using the chat API
+                try {
+                    const titleRes = await fetch('/api/ai-chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: text,
+                            userId: user?.id || user?.owner_id,
+                            generateTitle: true
+                        })
+                    });
+                    const titleData = await titleRes.json();
+                    if (titleData.title) {
+                        setConversations(prev => {
+                            const updated = prev.map(c =>
+                                c.id === convoId ? { ...c, title: titleData.title } : c
+                            );
+                            saveConversations(updated);
+                            return updated;
+                        });
+                    }
+                } catch {
+                    // Fallback title
+                    setConversations(prev => {
+                        const updated = prev.map(c =>
+                            c.id === convoId ? { ...c, title: titleText } : c
+                        );
+                        saveConversations(updated);
+                        return updated;
+                    });
+                }
             }
 
-            // Persist to localStorage (strip image data to save space)
+            // Persist to localStorage
             const persistMsgs = finalMessages.map(m => ({
                 role: m.role,
                 content: m.content,
+                toolsUsed: m.toolsUsed?.map(t => ({ tool: t.tool, confirmed: t.confirmed })),
+                pendingActions: m.pendingActions,
                 attachments: m.attachments?.map(a => ({ type: a.type, name: a.name })),
                 timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp
             }));
@@ -438,6 +487,7 @@ export default function AIPage() {
             setMessages(finalMessages);
         } finally {
             setLoading(false);
+            setAgentStatus(null);
         }
     };
 
@@ -636,8 +686,8 @@ export default function AIPage() {
                                         <div className="ai-logo-sparkle ai-sparkle-3">✦</div>
                                     </div>
                                 </div>
-                                <h1 className="ai-welcome-title">Cashlo AI</h1>
-                                <p className="ai-welcome-subtitle">Business Intelligence Assistant powered by Gemma 4</p>
+                                <h1 className="ai-welcome-title">Cashlo AI Agent</h1>
+                                <p className="ai-welcome-subtitle">Autonomous Business Agent • Powered by Gemma 4</p>
 
                                 <div className="ai-suggestions">
                                     {SUGGESTED_PROMPTS.map((prompt, idx) => (
@@ -697,10 +747,119 @@ export default function AIPage() {
                                                     ))}
                                                 </div>
                                             )}
+                                            {/* Tool usage cards */}
+                                            {msg.toolsUsed && msg.toolsUsed.length > 0 && (
+                                                <div className="ai-tools-used">
+                                                    {msg.toolsUsed.map((t, tidx) => {
+                                                        const label = TOOL_LABELS[t.tool] || { icon: '🔧', label: t.tool };
+                                                        return (
+                                                            <div key={tidx} className={`ai-tool-card ${t.confirmed ? 'executed' : 'pending'}`}>
+                                                                <span className="ai-tool-icon">{label.icon}</span>
+                                                                <span className="ai-tool-label">{label.label}</span>
+                                                                <span className={`ai-tool-status ${t.confirmed ? 'done' : 'wait'}`}>
+                                                                    {t.confirmed ? '✓' : '⏳'}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                             <div
                                                 className="ai-message-text"
                                                 dangerouslySetInnerHTML={{ __html: formatMessageContent(msg.content) }}
                                             />
+                                            {/* Pending action cards */}
+                                            {msg.pendingActions && msg.pendingActions.length > 0 && (
+                                                <div className="ai-pending-actions">
+                                                    {msg.pendingActions.map((action, aidx) => {
+                                                        const label = TOOL_LABELS[action.tool] || { icon: '⚡', label: action.tool };
+                                                        return (
+                                                            <div key={aidx} className="ai-action-card">
+                                                                <div className="ai-action-header">
+                                                                    <span className="ai-action-icon">{label.icon}</span>
+                                                                    <span className="ai-action-title">{label.label}</span>
+                                                                    <span className="ai-action-badge">Perlu Konfirmasi</span>
+                                                                </div>
+                                                                <div className="ai-action-params">
+                                                                    {Object.entries(action.params || {}).map(([k, v]) => (
+                                                                        <div key={k} className="ai-action-param">
+                                                                            <span className="ai-param-key">{k}:</span>
+                                                                            <span className="ai-param-value">{typeof v === 'number' ? v.toLocaleString('id-ID') : String(v)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="ai-action-buttons">
+                                                                    <button
+                                                                        className="ai-action-approve"
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                const res = await fetch('/api/ai-agent', {
+                                                                                    method: 'POST',
+                                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                                    body: JSON.stringify({
+                                                                                        userId: user?.id || user?.owner_id,
+                                                                                        confirmAction: { tool: action.tool, params: action.params }
+                                                                                    })
+                                                                                });
+                                                                                const result = await res.json();
+                                                                                // Add result message and remove pending action
+                                                                                setMessages(prev => {
+                                                                                    const updated = [...prev];
+                                                                                    // Remove this pending action from the message
+                                                                                    if (updated[idx]?.pendingActions) {
+                                                                                        updated[idx] = {
+                                                                                            ...updated[idx],
+                                                                                            pendingActions: updated[idx].pendingActions.filter((_, i) => i !== aidx)
+                                                                                        };
+                                                                                    }
+                                                                                    // Add confirmation result
+                                                                                    updated.push({
+                                                                                        role: 'assistant',
+                                                                                        content: `✅ ${result.response || result.actionResult?.message || 'Aksi berhasil dijalankan'}`,
+                                                                                        toolsUsed: [{ tool: action.tool, confirmed: true }],
+                                                                                        timestamp: new Date()
+                                                                                    });
+                                                                                    return updated;
+                                                                                });
+                                                                            } catch {
+                                                                                setMessages(prev => [...prev, {
+                                                                                    role: 'assistant',
+                                                                                    content: '❌ Gagal menjalankan aksi. Coba lagi.',
+                                                                                    timestamp: new Date()
+                                                                                }]);
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        ✓ Setuju
+                                                                    </button>
+                                                                    <button
+                                                                        className="ai-action-reject"
+                                                                        onClick={() => {
+                                                                            setMessages(prev => {
+                                                                                const updated = [...prev];
+                                                                                if (updated[idx]?.pendingActions) {
+                                                                                    updated[idx] = {
+                                                                                        ...updated[idx],
+                                                                                        pendingActions: updated[idx].pendingActions.filter((_, i) => i !== aidx)
+                                                                                    };
+                                                                                }
+                                                                                updated.push({
+                                                                                    role: 'assistant',
+                                                                                    content: `⛔ Aksi "${label.label}" dibatalkan oleh user.`,
+                                                                                    timestamp: new Date()
+                                                                                });
+                                                                                return updated;
+                                                                            });
+                                                                        }}
+                                                                    >
+                                                                        ✕ Tolak
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -712,7 +871,11 @@ export default function AIPage() {
                                         </div>
                                         <div className="ai-message-content">
                                             <div className="ai-message-header">
-                                                <span className="ai-message-name">Cashlo AI</span>
+                                                <span className="ai-message-name">Cashlo AI Agent</span>
+                                            </div>
+                                            <div className="ai-agent-status">
+                                                <div className="ai-agent-pulse"></div>
+                                                <span>{agentStatus === 'tools' ? '🔍 Mengambil data...' : '🧠 Menganalisis...'}</span>
                                             </div>
                                             <div className="ai-typing-indicator">
                                                 <div className="ai-typing-dot"></div>
