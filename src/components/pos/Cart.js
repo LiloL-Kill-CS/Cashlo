@@ -51,7 +51,6 @@ export default function Cart({
                             className="btn btn-primary w-full"
                             style={{
                                 width: '100%',
-                                animation: 'aiAgentPulse 2s infinite',
                                 fontWeight: '700'
                             }}
                             onClick={onSelectCustomer}
