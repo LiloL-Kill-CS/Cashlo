@@ -323,6 +323,7 @@ export default function POSPage() {
                     customer={selectedCustomer}
                     onConfirm={handlePaymentConfirm}
                     onCancel={() => setShowPaymentModal(false)}
+                    onSelectCustomer={() => setShowCustomerModal(true)}
                 />
             )}
 

@@ -48,11 +48,15 @@ export default function Cart({
                         </div>
                     ) : (
                         <button
-                            className="btn btn-outline btn-sm w-full"
-                            style={{ width: '100%', borderStyle: 'dashed' }}
+                            className="btn btn-primary w-full"
+                            style={{
+                                width: '100%',
+                                animation: 'aiAgentPulse 2s infinite',
+                                fontWeight: '700'
+                            }}
                             onClick={onSelectCustomer}
                         >
-                            + Pilih Pelanggan (Member)
+                            👥 Pilih Pelanggan (Member)
                         </button>
                     )}
                 </div>

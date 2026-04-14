@@ -6,7 +6,8 @@ export default function PaymentModal({
     total,
     customer,
     onConfirm,
-    onCancel
+    onCancel,
+    onSelectCustomer
 }) {
     const { rewards } = useLoyalty();
     const [cashReceived, setCashReceived] = useState('');
@@ -73,7 +74,7 @@ export default function PaymentModal({
 
                 <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
                     {/* Customer Info & Points */}
-                    {customer && (
+                    {customer ? (
                         <div style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)' }}>
                             <div className="flex justify-between items-center mb-sm">
                                 <span style={{ fontWeight: '600' }}>👤 {customer.name}</span>
@@ -105,6 +106,16 @@ export default function PaymentModal({
                             ) : (
                                 <div className="text-xs text-secondary italic mt-xs">Poin belum cukup untuk menukar hadiah.</div>
                             )}
+                        </div>
+                    ) : (
+                        <div style={{ marginBottom: 'var(--spacing-md)' }}>
+                            <button
+                                className="btn btn-outline w-full"
+                                style={{ borderStyle: 'dashed', borderColor: 'var(--color-warning)', color: 'var(--color-warning)' }}
+                                onClick={onSelectCustomer}
+                            >
+                                ⚠️ Pilih Pelanggan (Member) - Opsional
+                            </button>
                         </div>
                     )}
 

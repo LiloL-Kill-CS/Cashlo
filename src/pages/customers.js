@@ -10,7 +10,7 @@ import { formatCurrency } from '@/lib/db';
 export default function CustomersPage() {
     const { user, loading: authLoading } = useAuth();
     const ownerId = user?.owner_id || user?.id;
-    const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers, deductPoints } = useCustomers(ownerId, user?.role);
+    const { customers, loading: customersLoading, addCustomer, updateCustomer, deleteCustomer, searchCustomers, deductPoints, updatePoints } = useCustomers(ownerId, user?.role);
     const { transactions } = useTransactions(ownerId, user?.role, user?.id);
     const { rewards } = useLoyalty(ownerId);
     const insights = useCustomerInsights(customers, transactions);
@@ -20,8 +20,11 @@ export default function CustomersPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [showRedeemModal, setShowRedeemModal] = useState(false);
+    const [showPointsModal, setShowPointsModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [redeemingCustomer, setRedeemingCustomer] = useState(null);
+    const [pointsCustomer, setPointsCustomer] = useState(null);
+    const [newPoints, setNewPoints] = useState(0);
     const [formData, setFormData] = useState({ name: '', phone: '', email: '', address: '' });
 
     const handleSearch = (e) => {
@@ -64,6 +67,22 @@ export default function CustomersPage() {
             alert(`✅ Berhasil redeem! ${pointsCost} poin dikurangi.`);
             setShowRedeemModal(false);
         } catch (err) { alert('Gagal: ' + err.message); }
+    };
+
+    // --- Edit Points (Admin Only) ---
+    const openPointsModal = (customer) => {
+        setPointsCustomer(customer);
+        setNewPoints(customer.points || 0);
+        setShowPointsModal(true);
+    };
+
+    const handleSavePoints = async (e) => {
+        e.preventDefault();
+        try {
+            await updatePoints(pointsCustomer.id, parseInt(newPoints) || 0);
+            setShowPointsModal(false);
+            setPointsCustomer(null);
+        } catch (err) { alert('Gagal update poin: ' + err.message); }
     };
 
     // --- Calculate product purchase count per customer ---
@@ -207,6 +226,11 @@ export default function CustomersPage() {
                                                                 📩
                                                             </button>
                                                         )}
+                                                        {user?.role === 'admin' && (
+                                                            <button className="btn btn-xs btn-outline" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', marginRight: '4px' }} onClick={() => openPointsModal(c)}>
+                                                                Edit Poin
+                                                            </button>
+                                                        )}
                                                         <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(c)}>✏️</button>
                                                         <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(c.id)}>🗑️</button>
                                                     </td>
@@ -312,6 +336,41 @@ export default function CustomersPage() {
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- EDIT POINTS MODAL (ADMIN) --- */}
+            {showPointsModal && pointsCustomer && (
+                <div className="modal-overlay" onClick={() => setShowPointsModal(false)}>
+                    <div className="modal" style={{ width: '100%', maxWidth: '350px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 className="modal-title">Edit Poin Member</h3>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowPointsModal(false)}>✕</button>
+                        </div>
+                        <form onSubmit={handleSavePoints}>
+                            <div className="modal-body">
+                                <div className="text-sm text-secondary mb-md">
+                                    Edit poin untuk pelanggan <strong>{pointsCustomer.name}</strong>. Fitur ini hanya tersedia untuk admin.
+                                </div>
+                                <div className="form-group">
+                                    <label className="text-sm text-secondary mb-xs block">Jumlah Poin Saat Ini</label>
+                                    <input 
+                                        type="number" 
+                                        className="input" 
+                                        min="0"
+                                        required 
+                                        value={newPoints}
+                                        onChange={e => setNewPoints(e.target.value)} 
+                                        style={{ fontSize: '20px', fontWeight: 'bold' }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowPointsModal(false)}>Batal</button>
+                                <button type="submit" className="btn btn-primary">Simpan Poin</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

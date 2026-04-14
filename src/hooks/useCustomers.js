@@ -130,6 +130,18 @@ export function useCustomers(userId, userRole) {
         await loadCustomers();
     }
 
+    async function updatePoints(customerId, newPoints) {
+        if (typeof newPoints !== 'number' || newPoints < 0) throw new Error('Poin tidak valid');
+
+        const { error } = await supabase
+            .from('customers')
+            .update({ points: newPoints })
+            .eq('id', customerId);
+
+        if (error) throw error;
+        await loadCustomers();
+    }
+
     return {
         customers,
         loading,
@@ -138,6 +150,7 @@ export function useCustomers(userId, userRole) {
         deleteCustomer,
         searchCustomers,
         deductPoints,
+        updatePoints,
         reload: loadCustomers
     };
 }
