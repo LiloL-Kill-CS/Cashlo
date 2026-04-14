@@ -227,12 +227,21 @@ export default function CustomersPage() {
                                                             </button>
                                                         )}
                                                         {user?.role === 'admin' && (
-                                                            <button className="btn btn-xs btn-outline" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', marginRight: '4px' }} onClick={() => openPointsModal(c)}>
-                                                                Edit Poin
+                                                            <button 
+                                                                className="btn btn-xs" 
+                                                                style={{ 
+                                                                    background: 'var(--color-bg-secondary)', 
+                                                                    border: '1px solid var(--color-border)', 
+                                                                    color: 'var(--color-text-primary)', 
+                                                                    marginRight: '4px' 
+                                                                }} 
+                                                                onClick={() => openPointsModal(c)}
+                                                            >
+                                                                ⭐ Edit Poin
                                                             </button>
                                                         )}
-                                                        <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(c)}>✏️</button>
-                                                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(c.id)}>🗑️</button>
+                                                        <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(c)}>✏️ Edit</button>
+                                                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(c.id)}>🗑️ Hapus</button>
                                                     </td>
                                                 </tr>
                                             );
