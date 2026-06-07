@@ -193,6 +193,7 @@ export default function Sidebar({ activePage, userRole }) {
                     e.preventDefault();
                     try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* ignore */ }
                     localStorage.removeItem('cashlo_user');
+                    localStorage.removeItem('cashlo_token');
                     window.location.href = '/';
                 }}
             >

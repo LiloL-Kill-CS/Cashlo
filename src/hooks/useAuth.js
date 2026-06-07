@@ -7,6 +7,7 @@ import { setSupabaseToken } from '@/lib/supabase';
 // can render instantly without an auth flash; the server never trusts it.
 
 const CACHE_KEY = 'cashlo_user';
+const TOKEN_KEY = 'cashlo_token';
 const AuthContext = createContext(null);
 
 async function postJson(url, body) {
@@ -29,10 +30,14 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // 1) Instant render from cache (UX only).
+        // 1) Instant render from cache (UX only). Also restore the data token
+        // synchronously so early hook queries carry identity (avoids empty-data
+        // flash once RLS is on). /api/auth/me refreshes both below.
         try {
             const cached = localStorage.getItem(CACHE_KEY);
             if (cached) setUser(JSON.parse(cached));
+            const cachedToken = localStorage.getItem(TOKEN_KEY);
+            if (cachedToken) setSupabaseToken(cachedToken);
         } catch { /* ignore */ }
 
         // 2) Validate against the server cookie (source of truth).
@@ -44,10 +49,12 @@ export function AuthProvider({ children }) {
                     setUser(data.user);
                     setSupabaseToken(data.supabaseToken);
                     localStorage.setItem(CACHE_KEY, JSON.stringify(data.user));
+                    if (data.supabaseToken) localStorage.setItem(TOKEN_KEY, data.supabaseToken);
                 } else {
                     setUser(null);
                     setSupabaseToken(null);
                     localStorage.removeItem(CACHE_KEY);
+                    localStorage.removeItem(TOKEN_KEY);
                 }
             } catch {
                 // Network error: keep cached user (offline-friendly), do not force logout.
@@ -62,6 +69,7 @@ export function AuthProvider({ children }) {
         setUser(data.user);
         setSupabaseToken(data.supabaseToken);
         localStorage.setItem(CACHE_KEY, JSON.stringify(data.user));
+        if (data.supabaseToken) localStorage.setItem(TOKEN_KEY, data.supabaseToken);
         return data.user;
     };
 
@@ -75,6 +83,7 @@ export function AuthProvider({ children }) {
         setUser(null);
         setSupabaseToken(null);
         localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(TOKEN_KEY);
     };
 
     return (
