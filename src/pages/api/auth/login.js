@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { buildSessionCookie } from '@/lib/session';
+import { mintSupabaseToken } from '@/lib/supabaseToken';
 
 function sha256hex(s) {
     return crypto.createHash('sha256').update(s).digest('hex');
@@ -86,5 +87,6 @@ export default async function handler(req, res) {
     };
 
     res.setHeader('Set-Cookie', buildSessionCookie(safeUser));
-    return res.status(200).json({ user: safeUser });
+    // supabaseToken is null until SUPABASE_JWT_SECRET is configured (Phase 2).
+    return res.status(200).json({ user: safeUser, supabaseToken: mintSupabaseToken(safeUser) });
 }

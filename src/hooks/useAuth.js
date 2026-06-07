@@ -1,4 +1,5 @@
 import { useState, useEffect, createContext, useContext } from 'react';
+import { setSupabaseToken } from '@/lib/supabase';
 
 // Auth now runs server-side: credentials are verified in /api/auth/* using the
 // Supabase service-role key + bcrypt, and the session lives in an httpOnly
@@ -41,9 +42,11 @@ export function AuthProvider({ children }) {
                 const data = await res.json();
                 if (data.user) {
                     setUser(data.user);
+                    setSupabaseToken(data.supabaseToken);
                     localStorage.setItem(CACHE_KEY, JSON.stringify(data.user));
                 } else {
                     setUser(null);
+                    setSupabaseToken(null);
                     localStorage.removeItem(CACHE_KEY);
                 }
             } catch {
@@ -57,6 +60,7 @@ export function AuthProvider({ children }) {
     const login = async (username, password) => {
         const data = await postJson('/api/auth/login', { username, password });
         setUser(data.user);
+        setSupabaseToken(data.supabaseToken);
         localStorage.setItem(CACHE_KEY, JSON.stringify(data.user));
         return data.user;
     };
@@ -69,6 +73,7 @@ export function AuthProvider({ children }) {
     const logout = async () => {
         try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* ignore */ }
         setUser(null);
+        setSupabaseToken(null);
         localStorage.removeItem(CACHE_KEY);
     };
 
