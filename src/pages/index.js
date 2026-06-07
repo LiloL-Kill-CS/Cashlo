@@ -232,27 +232,6 @@ function LoginForm() {
           </div>
         </div>
 
-        {/* Demo Info */}
-        <div style={{
-          marginTop: 'var(--spacing-xl)',
-          padding: 'var(--spacing-md)',
-          background: 'var(--color-bg-secondary)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--color-border)'
-        }}>
-          <p className="text-sm text-muted" style={{ marginBottom: 'var(--spacing-sm)' }}>
-            Akun Demo:
-          </p>
-          <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
-            <div>
-              <p className="text-sm"><strong>Admin:</strong> admin / admin123</p>
-            </div>
-            <div>
-              <p className="text-sm"><strong>Kasir:</strong> kasir / kasir123</p>
-            </div>
-          </div>
-        </div>
-
         {/* Footer */}
         <div style={{
           textAlign: 'center',

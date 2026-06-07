@@ -189,8 +189,9 @@ export default function Sidebar({ activePage, userRole }) {
                 href="/"
                 className="sidebar-link"
                 title="Logout"
-                onClick={(e) => {
+                onClick={async (e) => {
                     e.preventDefault();
+                    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* ignore */ }
                     localStorage.removeItem('cashlo_user');
                     window.location.href = '/';
                 }}

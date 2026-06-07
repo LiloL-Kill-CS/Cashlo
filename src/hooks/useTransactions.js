@@ -22,8 +22,16 @@ export function useTransactions(userId, userRole, actualUserId) {
             // Wait, the easiest way is to add business_id or owner_id to transactions.
             // Since we haven't, we need to query transactions where user_id IN (admin, kasir1, kasir2)
             // Let's first get all user IDs that belong to this owner
-            const { data: users } = await supabase.from('users').select('id').eq('owner_id', userId);
-            const userIds = users ? users.map(u => u.id) : [userId];
+            let userIds = [userId];
+            try {
+                const res = await fetch('/api/users', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && Array.isArray(data.users) && data.users.length > 0) {
+                    userIds = data.users.map(u => u.id);
+                }
+            } catch (e) {
+                console.warn('Falling back to single-user transactions:', e.message);
+            }
             // Also include the owner themselves just in case
             if (!userIds.includes(userId)) userIds.push(userId);
 

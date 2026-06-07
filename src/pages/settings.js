@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
     const { user, loading: authLoading, logout, register } = useAuth();
@@ -29,9 +28,10 @@ export default function SettingsPage() {
 
     async function loadUsers() {
         try {
-            const { data: allUsers, error } = await supabase.from('users').select('*').eq('owner_id', user.id);
-            if (error) throw error;
-            setUsers(allUsers);
+            const res = await fetch('/api/users', { credentials: 'same-origin' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Gagal memuat pengguna');
+            setUsers(data.users || []);
         } catch (error) {
             console.error('Error loading users:', error);
         } finally {
@@ -55,12 +55,20 @@ export default function SettingsPage() {
         e.preventDefault();
 
         if (editingUser) {
-            const updates = {
-                name: formData.name,
-                role: formData.role
-            };
-            const { error } = await supabase.from('users').update(updates).eq('id', editingUser.id);
-            if (error) console.error('Error updating user:', error);
+            try {
+                const res = await fetch('/api/users', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ id: editingUser.id, name: formData.name, role: formData.role }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Gagal mengubah pengguna');
+            } catch (error) {
+                console.error('Error updating user:', error);
+                alert(error.message);
+                return;
+            }
         } else {
                         try {
                 await register(
@@ -82,8 +90,19 @@ export default function SettingsPage() {
     };
 
     const toggleUserActive = async (u) => {
-        const { error } = await supabase.from('users').update({ is_active: !u.is_active }).eq('id', u.id);
-        if (error) console.error('Error toggling user:', error);
+        try {
+            const res = await fetch('/api/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ id: u.id, is_active: !u.is_active }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Gagal mengubah status');
+        } catch (error) {
+            console.error('Error toggling user:', error);
+            alert(error.message);
+        }
         await loadUsers();
     };
 

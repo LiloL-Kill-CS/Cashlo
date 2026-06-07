@@ -3,7 +3,6 @@ import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useHR } from '@/hooks/useHR';
 import { formatDate } from '@/lib/db';
-import { supabase } from '@/lib/supabase'; // Need direct access for user list loading
 
 export default function HRPage() {
     const { user, loading: authLoading } = useAuth();
@@ -32,8 +31,13 @@ export default function HRPage() {
     }, [user, authLoading]);
 
     async function loadUsers() {
-        const { data } = await supabase.from('users').select('id, name');
-        if (data) setAllUsers(data);
+        try {
+            const res = await fetch('/api/users', { credentials: 'same-origin' });
+            const data = await res.json();
+            if (res.ok && data.users) setAllUsers(data.users.map(u => ({ id: u.id, name: u.name })));
+        } catch (e) {
+            console.error('Error loading users:', e);
+        }
     }
 
     // --- Actions ---
