@@ -161,7 +161,7 @@ export default function SettingsPage() {
                         {/* Highlighted Tambah Kasir Banner */}
                         <div className="card" style={{
                             marginBottom: 'var(--spacing-lg)',
-                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            background: 'linear-gradient(135deg, #6F4E37 0%, #3B2A20 100%)',
                             border: 'none',
                             color: 'white'
                         }}>
@@ -176,7 +176,7 @@ export default function SettingsPage() {
                                 </div>
                                 <button className="btn" onClick={openAddModal} style={{
                                     background: 'white',
-                                    color: '#764ba2',
+                                    color: '#6F4E37',
                                     fontWeight: '700',
                                     padding: '12px 24px',
                                     fontSize: '14px',

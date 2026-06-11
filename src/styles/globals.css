@@ -2153,7 +2153,7 @@ a:hover {
 .ai-logo-letter {
   font-size: 36px;
   font-weight: 800;
-  color: white;
+  color: var(--color-accent);
   letter-spacing: -0.05em;
 }
 
