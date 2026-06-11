@@ -4,6 +4,7 @@
  * Generates actionable alerts based on pattern analysis.
  */
 import { createClient } from '@supabase/supabase-js';
+import { getSessionUser } from '@/lib/session';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 // Server-side: use the service-role key (bypasses RLS); queries filter by owner/user.
@@ -15,11 +16,12 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { userId } = req.query;
-
-    if (!userId) {
-        return res.status(400).json({ error: 'userId is required' });
+    // Auth gate: derive the business from the signed session, not the query.
+    const session = getSessionUser(req);
+    if (!session) {
+        return res.status(401).json({ error: 'Tidak terautentikasi' });
     }
+    const userId = session.owner_id || session.id;
 
     try {
         const alerts = await generatePredictiveAlerts(userId);

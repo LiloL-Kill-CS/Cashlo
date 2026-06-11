@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { generateAIContext, calculateDailyPrediction, PALANGKA_RAYA_CONTEXT } from '@/lib/regionalIntelligence';
+import { getSessionUser } from '@/lib/session';
 
 // Initialize Supabase for server-side
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,10 +14,18 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { message, userId, image, contextMessages, generateTitle } = req.body;
+    // Auth gate: identity comes from the signed session cookie, NOT the request
+    // body. Prevents anyone from POSTing another business's userId.
+    const session = getSessionUser(req);
+    if (!session) {
+        return res.status(401).json({ error: 'Tidak terautentikasi' });
+    }
+    const userId = session.owner_id || session.id;
 
-    if ((!message && !image) || !userId) {
-        return res.status(400).json({ error: 'Message or image, and userId required' });
+    const { message, image, contextMessages, generateTitle } = req.body;
+
+    if (!message && !image) {
+        return res.status(400).json({ error: 'Message or image required' });
     }
 
     // Initialize Supabase with global Anon Key (assuming RLS allows or is handled by manual filters)
@@ -58,7 +67,7 @@ async function getBusinessContext(userId) {
     const { data: todayTxns } = await supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('owner_id', userId)
         .gte('datetime', startOfDay)
         .neq('status', 'voided');
 
@@ -66,7 +75,7 @@ async function getBusinessContext(userId) {
     const { data: monthTxns } = await supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('owner_id', userId)
         .gte('datetime', startOfMonth)
         .neq('status', 'voided');
 
@@ -81,6 +90,7 @@ async function getBusinessContext(userId) {
     const { data: stocks } = await supabase
         .from('product_stocks')
         .select('*, products(name)')
+        .eq('owner_id', userId)
         .lte('quantity', 10);
 
     // Get expenses this month

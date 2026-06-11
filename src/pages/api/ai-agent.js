@@ -1,6 +1,7 @@
 // Server-side agent: use the service-role client (bypasses RLS). Actions are
 // scoped by owner_id passed in the request/tool params.
 import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
+import { getSessionUser } from '@/lib/session';
 
 // ============================================
 // CASHLO AUTONOMOUS AI AGENT
@@ -692,11 +693,15 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { message, userId, contextMessages, confirmAction } = req.body;
-
-    if (!userId) {
-        return res.status(400).json({ error: 'userId required' });
+    // Auth gate: identity (and thus which business the agent can read/WRITE)
+    // comes from the signed session cookie, never the request body.
+    const session = getSessionUser(req);
+    if (!session) {
+        return res.status(401).json({ error: 'Tidak terautentikasi' });
     }
+    const userId = session.owner_id || session.id;
+
+    const { message, contextMessages, confirmAction } = req.body;
 
     // ─── Handle action confirmation ───
     if (confirmAction) {
