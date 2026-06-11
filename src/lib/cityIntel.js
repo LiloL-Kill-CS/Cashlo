@@ -36,6 +36,61 @@ export async function fetchAirQuality() {
     }
 }
 
+// ─── NASA FIRMS satellite active-fire hotspots (real satellite data) ───
+// Needs a free MAP_KEY from https://firms.modaps.eosdis.nasa.gov/api/map_key/
+export async function fetchFireHotspots() {
+    const key = process.env.NASA_FIRMS_MAP_KEY;
+    if (!key) return { available: false, count: 0, hotspots: [], note: 'NASA_FIRMS_MAP_KEY belum diset — peta titik api nonaktif' };
+    // bounding box around Palangka Raya / Central Kalimantan: west,south,east,north
+    const area = '112.3,-3.6,115.6,-0.8';
+    const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${key}/VIIRS_SNPP_NRT/${area}/2`;
+    try {
+        const r = await fetch(url, { next: { revalidate: 3600 } });
+        if (!r.ok) throw new Error('FIRMS http ' + r.status);
+        const text = await r.text();
+        const lines = text.trim().split('\n');
+        if (lines.length < 2) return { available: true, count: 0, hotspots: [], note: 'Tidak ada titik api 2 hari terakhir' };
+        const h = lines[0].split(',');
+        const iLa = h.indexOf('latitude'), iLo = h.indexOf('longitude'), iCf = h.indexOf('confidence'), iDt = h.indexOf('acq_date'), iFp = h.indexOf('frp');
+        const hotspots = lines.slice(1).map(l => {
+            const c = l.split(',');
+            return { lat: parseFloat(c[iLa]), lon: parseFloat(c[iLo]), confidence: c[iCf], date: c[iDt], frp: parseFloat(c[iFp]) };
+        }).filter(p => !isNaN(p.lat));
+        return { available: true, count: hotspots.length, hotspots: hotspots.slice(0, 600), note: 'Live NASA FIRMS VIIRS (S-NPP)' };
+    } catch (e) {
+        return { available: false, count: 0, hotspots: [], note: 'FIRMS error: ' + e.message };
+    }
+}
+
+// ─── Nearby competitors from OpenStreetMap (free, no key) ───
+export async function fetchNearbyPlaces(lat = PLK.lat, lon = PLK.lon, radiusMeters = 4000) {
+    const q = `[out:json][timeout:25];(node["amenity"~"cafe|restaurant|fast_food"](around:${radiusMeters},${lat},${lon}););out body 80;`;
+    const endpoints = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+    let d = null, lastErr = null;
+    for (const ep of endpoints) {
+        try {
+            const r = await fetch(ep, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'CashloPOS/1.0 (intel)' },
+                body: 'data=' + encodeURIComponent(q),
+                next: { revalidate: 86400 }
+            });
+            if (!r.ok) { lastErr = 'Overpass http ' + r.status; continue; }
+            d = await r.json();
+            break;
+        } catch (e) { lastErr = e.message; }
+    }
+    try {
+        if (!d) throw new Error(lastErr || 'Overpass unavailable');
+        const places = (d.elements || []).filter(e => e.tags?.name).map(e => ({
+            name: e.tags.name, lat: e.lat, lon: e.lon, type: e.tags.amenity
+        })).slice(0, 80);
+        return { available: true, count: places.length, places, source: 'OpenStreetMap (live)' };
+    } catch (e) {
+        return { available: false, count: 0, places: [], note: e.message };
+    }
+}
+
 function hazeRisk(aqi) {
     if (aqi == null) return { level: 'unknown', label: 'Tidak diketahui', multiplier: 1.0, aqi };
     if (aqi <= 50) return { level: 'good', label: 'Udara Baik', multiplier: 1.0, aqi };
@@ -64,7 +119,7 @@ function cyclePhase(dom) {
 }
 
 // ─── MAIN FUSION ───
-export function computeCityIntel({ weather, air, avgDailyRevenue = 2000000, competitors = [], date = new Date() }) {
+export function computeCityIntel({ weather, air, avgDailyRevenue = 2000000, competitors = [], fires = null, nearbyCount = null, date = new Date() }) {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayNamesId = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const dow = date.getDay();
@@ -105,6 +160,16 @@ export function computeCityIntel({ weather, air, avgDailyRevenue = 2000000, comp
     if (dow === 5) signals.push({ type: 'opportunity', sev: 'low', title: 'Jumat', detail: 'Lonjakan sore setelah Jumatan. Siapkan stok jam 13:00–15:00.' });
     if (todayEvent) signals.push({ type: todayEvent.impact >= 1 ? 'opportunity' : 'threat', sev: 'high', title: `Event: ${todayEvent.name}`, detail: todayEvent.impact >= 1 ? `Impact +${Math.round((todayEvent.impact - 1) * 100)}%. Tema promo sesuai event.` : 'Banyak yang libur/mudik — pertimbangkan jam buka lebih pendek.' });
     if (isDry) signals.push({ type: 'opportunity', sev: 'low', title: 'Musim Kering', detail: 'Minuman dingin & es jadi primadona sampai Oktober.' });
+
+    // SATELLITE FIRE EARLY-WARNING (NASA FIRMS) — haze comes 1-2 days after fires
+    if (fires && fires.available && fires.count > 0) {
+        const sev = fires.count >= 50 ? 'high' : fires.count >= 15 ? 'med' : 'low';
+        signals.push({ type: 'threat', sev, title: `🛰️ ${fires.count} Titik Api Terdeteksi Satelit`, detail: `NASA FIRMS mendeteksi ${fires.count} hotspot kebakaran di sekitar Palangka Raya. Kabut asap biasanya menyusul 1-2 hari. Siapkan stok minuman hangat & rencanakan dorongan delivery SEBELUM asap datang — menangkan pasar saat kompetitor belum siap.` });
+    }
+    if (nearbyCount != null && nearbyCount > 0) {
+        const dens = nearbyCount >= 25 ? 'sangat padat' : nearbyCount >= 10 ? 'padat' : 'sedang';
+        signals.push({ type: nearbyCount >= 25 ? 'threat' : 'opportunity', sev: 'low', title: `Persaingan ${dens} (${nearbyCount} F&B sekitar)`, detail: nearbyCount >= 25 ? 'Banyak pesaing di radius 4km. Diferensiasi via loyalti, kualitas, & jam buka yang menutup celah kompetitor.' : 'Persaingan belum jenuh — peluang merebut pangsa pasar dengan ekspansi jam & menu.' });
+    }
 
     // ─── COMPETITOR BATTLE PLAN ───
     const battlePlan = [];
@@ -150,12 +215,14 @@ export function computeCityIntel({ weather, air, avgDailyRevenue = 2000000, comp
         signals,
         battle_plan: battlePlan,
         upcoming_events: upcoming,
+        fires: fires ? { available: fires.available, count: fires.count, note: fires.note } : null,
         data_sources: [
             { name: 'Air Quality / Haze', status: air?.estimated ? 'estimated' : 'live', detail: air?.source },
             { name: 'Weather', status: weather?.estimated ? 'estimated' : 'live', detail: weather?.source || 'BMKG/Open-Meteo' },
+            { name: 'Satellite Fire (NASA FIRMS)', status: fires?.available ? 'live' : 'available', detail: fires?.note || 'Aktifkan dengan MAP_KEY gratis' },
+            { name: 'Competitor Map (OpenStreetMap)', status: nearbyCount != null ? 'live' : 'available', detail: nearbyCount != null ? `${nearbyCount} F&B terdeteksi radius 4km` : 'Peta pesaing dari data OSM' },
             { name: 'Economic Cycle', status: 'model', detail: 'Payday / tanggal tua' },
             { name: 'Event Calendar', status: 'model', detail: 'Kalender lokal Palangka Raya' },
-            { name: 'Satellite Fire (NASA FIRMS)', status: 'available', detail: 'Aktifkan dengan MAP_KEY gratis untuk peta titik api' },
         ],
     };
 }

@@ -4,6 +4,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/db';
+import IntelMap from '@/components/provitina/IntelMap';
 
 const HAZE_COLORS = {
     good: '#22C55E', moderate: '#84CC16', usg: '#EAB308',
@@ -17,6 +18,7 @@ export default function ProvitinaPage() {
     const [intel, setIntel] = useState(null);
     const [loading, setLoading] = useState(true);
     const [competitors, setCompetitors] = useState([]);
+    const [mapData, setMapData] = useState({ fires: { hotspots: [], count: 0, available: false }, places: { places: [], count: 0 } });
     const [showCompForm, setShowCompForm] = useState(false);
     const [compForm, setCompForm] = useState({ name: '', location: '', price_level: 'setara', last_promo: '', notes: '' });
 
@@ -62,6 +64,10 @@ export default function ProvitinaPage() {
     useEffect(() => {
         if (!owner) return;
         (async () => { const comps = await loadCompetitors(); await loadIntel(comps); })();
+        // Map layer (satellite fires + nearby competitors) loads separately — slower
+        fetch('/api/regional-data?type=map').then(r => r.json()).then(j => {
+            if (j.data) setMapData(j.data);
+        }).catch(() => { });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [owner]);
 
@@ -117,6 +123,11 @@ export default function ProvitinaPage() {
                 </div>
 
                 <div className="prov-wrap">
+                    {mapData.fires?.count > 0 && (
+                        <div className="prov-fire-banner">
+                            🛰️🔥 <b>{mapData.fires.count} titik api</b> terdeteksi satelit di sekitar Palangka Raya — kabut asap berpotensi datang 1–2 hari. Aktifkan strategi delivery & stok minuman hangat sekarang, sebelum kompetitor.
+                        </div>
+                    )}
                     {/* HERO: demand gauge + projection */}
                     <div className="prov-hero">
                         <div className="prov-card prov-gauge-card">
@@ -165,6 +176,17 @@ export default function ProvitinaPage() {
                             <div className="prov-stat-icon">🛰️</div>
                             <div className="prov-stat-val">PM2.5 {env.pm2_5 != null ? Math.round(env.pm2_5) : '—'}</div>
                             <div className="prov-stat-label">Partikel asap (µg/m³)</div>
+                        </div>
+                    </div>
+
+                    {/* INTEL MAP — satellite fires + competitor locations */}
+                    <div className="prov-section-label" style={{ marginTop: 28 }}>🗺️ Peta Intel — Titik Api Satelit & Pesaing Sekitar</div>
+                    <div className="prov-card" style={{ padding: 14 }}>
+                        <IntelMap fires={mapData.fires?.hotspots || []} places={mapData.places?.places || []} competitors={competitors} />
+                        <div className="prov-map-legend">
+                            <span><i style={{ background: '#C98A4B' }} /> Toko Anda</span>
+                            <span><i style={{ background: '#F97316' }} /> Titik api satelit{mapData.fires?.available ? ` (${mapData.fires.count})` : ' — set NASA_FIRMS_MAP_KEY'}</span>
+                            <span><i style={{ background: '#EAB308' }} /> Pesaing F&B sekitar ({mapData.places?.count || 0})</span>
                         </div>
                     </div>
 
@@ -348,6 +370,10 @@ function ProvStyles() {
             .prov-src-status { font-size: 11px; text-transform: uppercase; color: var(--provitina-text-secondary); }
             .prov-src-note { font-size: 11px; color: var(--color-text-muted); margin-top: 12px; }
             .prov-empty { color: var(--color-text-muted); font-size: 13px; padding: 8px 0; }
+            .prov-fire-banner { background: linear-gradient(135deg, rgba(239,68,68,0.18), rgba(249,115,22,0.12)); border: 1px solid rgba(249,115,22,0.4); border-radius: 12px; padding: 14px 18px; margin-bottom: 22px; font-size: 14px; line-height: 1.5; }
+            .prov-map-legend { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 12px; padding: 0 6px; font-size: 12px; color: var(--provitina-text-secondary); }
+            .prov-map-legend span { display: flex; align-items: center; gap: 6px; }
+            .prov-map-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
             .prov-footer { text-align: center; color: var(--color-text-muted); font-size: 12px; margin-top: 36px; }
             @media (max-width: 900px) {
                 .prov-hero, .prov-two-col { grid-template-columns: 1fr; }

@@ -4,7 +4,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 import { getSessionUser } from '@/lib/session';
 import { callChat, generateImage } from '@/lib/aiModels';
 import { fetchWeatherData } from '@/lib/regionalIntelligence';
-import { fetchAirQuality, computeCityIntel } from '@/lib/cityIntel';
+import { fetchAirQuality, fetchFireHotspots, computeCityIntel } from '@/lib/cityIntel';
 
 // ============================================
 // CASHLO AUTONOMOUS AI AGENT
@@ -22,20 +22,22 @@ const TOOLS = {
         requiresConfirmation: false,
         execute: async (params, userId) => {
             const since = new Date(); since.setDate(since.getDate() - 30);
-            const [{ data: txns }, { data: comps }, weather, air] = await Promise.all([
+            const [{ data: txns }, { data: comps }, weather, air, fires] = await Promise.all([
                 supabase.from('transactions').select('subtotal, datetime').eq('owner_id', userId).gte('datetime', since.toISOString()).neq('status', 'voided'),
                 supabase.from('competitors').select('name, last_promo, price_level').eq('owner_id', userId),
                 fetchWeatherData(),
                 fetchAirQuality(),
+                fetchFireHotspots(),
             ]);
             let avg = 2000000;
             if (txns && txns.length) {
                 const days = new Set(txns.map(t => (t.datetime || '').slice(0, 10))).size || 1;
                 avg = Math.round(txns.reduce((s, t) => s + (t.subtotal || 0), 0) / days);
             }
-            const intel = computeCityIntel({ weather: weather?.[0], air, avgDailyRevenue: avg, competitors: comps || [] });
+            const intel = computeCityIntel({ weather: weather?.[0], air, fires, avgDailyRevenue: avg, competitors: comps || [] });
             return {
                 indeks_permintaan: `${intel.demand.index}/100 (${intel.demand.label})`,
+                titik_api_satelit: fires?.available ? `${fires.count} hotspot (NASA FIRMS)` : 'tidak aktif (perlu MAP_KEY)',
                 proyeksi_omzet: `Rp ${intel.projection.revenue.toLocaleString('id-ID')}`,
                 proyeksi_profit: `Rp ${intel.projection.profit.toLocaleString('id-ID')}`,
                 cuaca: `${intel.environment.weather_desc}, ${Math.round(intel.environment.temperature || 0)}°C`,

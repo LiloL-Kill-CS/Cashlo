@@ -12,7 +12,7 @@ import {
     generateAIContext,
     generateMenuRecommendations
 } from '@/lib/regionalIntelligence';
-import { fetchAirQuality, computeCityIntel } from '@/lib/cityIntel';
+import { fetchAirQuality, fetchFireHotspots, fetchNearbyPlaces, computeCityIntel } from '@/lib/cityIntel';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -64,14 +64,23 @@ export default async function handler(req, res) {
                 }).slice(0, 5);
                 return res.status(200).json({ success: true, data: upcoming });
 
+            case 'map':
+                // Heavier map layer: satellite fires + nearby competitors (OSM)
+                const [fireData, placesData] = await Promise.all([
+                    fetchFireHotspots(),
+                    fetchNearbyPlaces()
+                ]);
+                return res.status(200).json({ success: true, data: { fires: fireData, places: placesData } });
+
             case 'full':
             default:
                 // Return comprehensive data + fused CITY INTEL (Palantir layer)
                 const avgDailyRevenue = req.query.avgDailyRevenue ? parseFloat(req.query.avgDailyRevenue) : 2000000;
-                const [weatherData, trendData, airData] = await Promise.all([
+                const [weatherData, trendData, airData, firesForIntel] = await Promise.all([
                     fetchWeatherData(),
                     fetchLocalTrends(),
-                    fetchAirQuality()
+                    fetchAirQuality(),
+                    fetchFireHotspots()
                 ]);
 
                 const todayPrediction = calculateDailyPrediction(new Date());
@@ -83,6 +92,7 @@ export default async function handler(req, res) {
                 const intel = computeCityIntel({
                     weather: weatherData?.[0],
                     air: airData,
+                    fires: firesForIntel,
                     avgDailyRevenue: isNaN(avgDailyRevenue) ? 2000000 : avgDailyRevenue,
                 });
 
