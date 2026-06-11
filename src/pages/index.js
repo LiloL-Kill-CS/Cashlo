@@ -59,7 +59,7 @@ function LoginForm() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--color-bg-primary)',
+      background: 'radial-gradient(1200px 600px at 50% -10%, #1A1A1A 0%, var(--color-bg-primary) 60%)',
       padding: 'var(--spacing-lg)'
     }}>
       <div style={{
@@ -69,26 +69,46 @@ function LoginForm() {
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-2xl)' }}>
           <div style={{
-            fontSize: '64px',
+            width: '64px',
+            height: '64px',
+            margin: '0 auto var(--spacing-md)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'linear-gradient(145deg, #1F1F1F, #0A0A0A)',
+            border: '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '34px',
             fontWeight: '800',
             letterSpacing: '-0.05em',
-            marginBottom: 'var(--spacing-sm)'
+            boxShadow: '0 0 40px rgba(255,255,255,0.06)'
+          }}>
+            C
+          </div>
+          <div style={{
+            fontSize: '44px',
+            fontWeight: '800',
+            letterSpacing: '-0.05em',
+            lineHeight: 1.1
           }}>
             Cashlo
           </div>
-          <p className="text-secondary">Coffee Shop Point of Sale</p>
+          <p className="text-secondary" style={{ marginTop: 'var(--spacing-xs)' }}>Coffee Shop Point of Sale</p>
         </div>
 
         {/* Login/Register Card */}
-        <div className="card">
+        <div className="card" style={{ boxShadow: 'var(--shadow-xl)' }}>
           <div className="card-body" style={{ padding: 'var(--spacing-xl)' }}>
-            {/* Mode Tabs */}
+            {/* Mode Tabs — segmented control */}
             <div style={{
-              display: 'flex',
-              gap: 'var(--spacing-sm)',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 'var(--spacing-xs)',
               marginBottom: 'var(--spacing-lg)',
-              borderBottom: '1px solid var(--color-border)',
-              paddingBottom: 'var(--spacing-md)'
+              padding: 'var(--spacing-xs)',
+              background: 'var(--color-bg-tertiary)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-md)'
             }}>
               <button
                 type="button"
