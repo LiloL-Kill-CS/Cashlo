@@ -200,6 +200,7 @@ a:hover {
   line-height: 1;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
+  background-color: transparent; /* safety: undefined variants don't fall back to native white */
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
@@ -278,6 +279,17 @@ a:hover {
 
 .btn-error:hover:not(:disabled) {
   filter: brightness(1.1);
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border-color: var(--color-border-light);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-border-focus);
 }
 
 /* Button Sizes */
