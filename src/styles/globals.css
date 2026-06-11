@@ -32,8 +32,10 @@
   --color-border-light: #333333;
   --color-border-focus: #555555;
 
-  --color-accent: #FFFFFF;
-  --color-accent-hover: #E0E0E0;
+  /* Warm coffee accent (caramel/crema) — brand color on dark theme */
+  --color-accent: #C98A4B;
+  --color-accent-hover: #DBA063;
+  --color-accent-soft: rgba(201, 138, 75, 0.12);
 
   /* Semantic Colors */
   --color-success: #22C55E;

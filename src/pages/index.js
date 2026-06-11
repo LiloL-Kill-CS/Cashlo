@@ -81,7 +81,8 @@ function LoginForm() {
             fontSize: '34px',
             fontWeight: '800',
             letterSpacing: '-0.05em',
-            boxShadow: '0 0 40px rgba(255,255,255,0.06)'
+            color: 'var(--color-accent)',
+            boxShadow: '0 0 40px rgba(201, 138, 75, 0.18)'
           }}>
             C
           </div>
