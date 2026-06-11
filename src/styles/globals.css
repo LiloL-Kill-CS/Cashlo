@@ -103,17 +103,17 @@
   /* ============================================
      PROVITINA THEME (Premium Intelligence)
      ============================================ */
-  --provitina-primary: #0F172A;
-  /* Deep Blue */
-  --provitina-accent: #0EA5E9;
-  /* Electric Blue */
-  --provitina-bg: #F8FAFC;
-  /* Clean White/Gray */
-  --provitina-card-bg: #FFFFFF;
-  --provitina-text: #1E293B;
-  --provitina-text-secondary: #64748B;
-  --provitina-border: #E2E8F0;
-  --provitina-gradient: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+  --provitina-primary: #1A1410;
+  /* Warm espresso */
+  --provitina-accent: #C98A4B;
+  /* Caramel */
+  --provitina-bg: #0A0A0A;
+  /* App dark */
+  --provitina-card-bg: #141210;
+  --provitina-text: #FFFFFF;
+  --provitina-text-secondary: #B3A89C;
+  --provitina-border: #2A241E;
+  --provitina-gradient: linear-gradient(135deg, #1A1410 0%, #0A0A0A 100%);
 }
 
 /* Base Styles */

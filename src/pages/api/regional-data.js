@@ -12,6 +12,7 @@ import {
     generateAIContext,
     generateMenuRecommendations
 } from '@/lib/regionalIntelligence';
+import { fetchAirQuality, computeCityIntel } from '@/lib/cityIntel';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -65,10 +66,12 @@ export default async function handler(req, res) {
 
             case 'full':
             default:
-                // Return comprehensive data
-                const [weatherData, trendData] = await Promise.all([
+                // Return comprehensive data + fused CITY INTEL (Palantir layer)
+                const avgDailyRevenue = req.query.avgDailyRevenue ? parseFloat(req.query.avgDailyRevenue) : 2000000;
+                const [weatherData, trendData, airData] = await Promise.all([
                     fetchWeatherData(),
-                    fetchLocalTrends()
+                    fetchLocalTrends(),
+                    fetchAirQuality()
                 ]);
 
                 const todayPrediction = calculateDailyPrediction(new Date());
@@ -77,10 +80,18 @@ export default async function handler(req, res) {
                     return eventDate >= new Date();
                 }).slice(0, 3);
 
+                const intel = computeCityIntel({
+                    weather: weatherData?.[0],
+                    air: airData,
+                    avgDailyRevenue: isNaN(avgDailyRevenue) ? 2000000 : avgDailyRevenue,
+                });
+
                 return res.status(200).json({
                     success: true,
                     data: {
                         weather: weatherData,
+                        air_quality: airData,
+                        intel,
                         trends: trendData,
                         prediction: todayPrediction,
                         upcoming_events: upcomingEvents,
