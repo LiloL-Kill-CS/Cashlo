@@ -33,10 +33,12 @@ export function AuthProvider({ children }) {
         // 1) Instant render from cache (UX only). Also restore the data token
         // synchronously so early hook queries carry identity (avoids empty-data
         // flash once RLS is on). /api/auth/me refreshes both below.
+        let hadTokenAtInit = false;
         try {
             const cached = localStorage.getItem(CACHE_KEY);
             if (cached) setUser(JSON.parse(cached));
             const cachedToken = localStorage.getItem(TOKEN_KEY);
+            hadTokenAtInit = !!cachedToken;
             if (cachedToken) setSupabaseToken(cachedToken);
         } catch { /* ignore */ }
 
@@ -49,7 +51,18 @@ export function AuthProvider({ children }) {
                     setUser(data.user);
                     setSupabaseToken(data.supabaseToken);
                     localStorage.setItem(CACHE_KEY, JSON.stringify(data.user));
-                    if (data.supabaseToken) localStorage.setItem(TOKEN_KEY, data.supabaseToken);
+                    if (data.supabaseToken) {
+                        localStorage.setItem(TOKEN_KEY, data.supabaseToken);
+                        // First time this session gets a data token (e.g. existing
+                        // cookie session after the RLS rollout): data hooks may have
+                        // already fetched token-less. Reload ONCE so they refetch
+                        // with identity. Guarded to never loop.
+                        if (!hadTokenAtInit && !sessionStorage.getItem('cashlo_token_reloaded')) {
+                            sessionStorage.setItem('cashlo_token_reloaded', '1');
+                            window.location.reload();
+                            return;
+                        }
+                    }
                 } else {
                     setUser(null);
                     setSupabaseToken(null);

@@ -6,8 +6,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Server-side: use the service-role key (bypasses RLS); queries filter by owner/user.
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {

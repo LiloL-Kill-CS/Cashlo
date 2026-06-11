@@ -3,8 +3,10 @@ import { generateAIContext, calculateDailyPrediction, PALANGKA_RAYA_CONTEXT } fr
 
 // Initialize Supabase for server-side
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Server-side: use the service-role key (bypasses RLS). Queries below already
+// filter by userId/owner_id, so scoping is enforced manually.
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {

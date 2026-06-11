@@ -1,4 +1,6 @@
-import { supabase } from '@/lib/supabase';
+// Server-side agent: use the service-role client (bypasses RLS). Actions are
+// scoped by owner_id passed in the request/tool params.
+import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 
 // ============================================
 // CASHLO AUTONOMOUS AI AGENT
