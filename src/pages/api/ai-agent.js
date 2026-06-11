@@ -3,6 +3,8 @@
 import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 import { getSessionUser } from '@/lib/session';
 import { callChat, generateImage } from '@/lib/aiModels';
+import { fetchWeatherData } from '@/lib/regionalIntelligence';
+import { fetchAirQuality, computeCityIntel } from '@/lib/cityIntel';
 
 // ============================================
 // CASHLO AUTONOMOUS AI AGENT
@@ -13,6 +15,39 @@ const MAX_TOOL_ITERATIONS = 5;
 
 // ─── TOOL REGISTRY ───
 const TOOLS = {
+    // ══════ CITY INTEL (Palantir) ══════
+    get_city_intel: {
+        description: 'Ambil INTEL KOTA Palangka Raya real-time: indeks permintaan hari ini, cuaca, kualitas udara & risiko kabut asap, proyeksi omzet, sinyal PELUANG/ANCAMAN, dan BATTLE PLAN untuk mengalahkan kompetitor. WAJIB dipakai saat user tanya strategi, "hari ini ramai?", prediksi, cara kalahkan kompetitor, atau rekomendasi promo.',
+        parameters: {},
+        requiresConfirmation: false,
+        execute: async (params, userId) => {
+            const since = new Date(); since.setDate(since.getDate() - 30);
+            const [{ data: txns }, { data: comps }, weather, air] = await Promise.all([
+                supabase.from('transactions').select('subtotal, datetime').eq('owner_id', userId).gte('datetime', since.toISOString()).neq('status', 'voided'),
+                supabase.from('competitors').select('name, last_promo, price_level').eq('owner_id', userId),
+                fetchWeatherData(),
+                fetchAirQuality(),
+            ]);
+            let avg = 2000000;
+            if (txns && txns.length) {
+                const days = new Set(txns.map(t => (t.datetime || '').slice(0, 10))).size || 1;
+                avg = Math.round(txns.reduce((s, t) => s + (t.subtotal || 0), 0) / days);
+            }
+            const intel = computeCityIntel({ weather: weather?.[0], air, avgDailyRevenue: avg, competitors: comps || [] });
+            return {
+                indeks_permintaan: `${intel.demand.index}/100 (${intel.demand.label})`,
+                proyeksi_omzet: `Rp ${intel.projection.revenue.toLocaleString('id-ID')}`,
+                proyeksi_profit: `Rp ${intel.projection.profit.toLocaleString('id-ID')}`,
+                cuaca: `${intel.environment.weather_desc}, ${Math.round(intel.environment.temperature || 0)}°C`,
+                kabut_asap: `${intel.environment.haze?.label} (AQI ${intel.environment.us_aqi ?? '-'})`,
+                sinyal: intel.signals.map(s => `[${s.type === 'opportunity' ? 'PELUANG' : 'ANCAMAN'}] ${s.title}: ${s.detail}`),
+                battle_plan: intel.battle_plan.map(b => `[${b.priority}] ${b.action} — ${b.why}`),
+                kompetitor_dipantau: (comps || []).map(c => c.name),
+                event_mendatang: intel.upcoming_events.map(e => `${e.name} (${e.date})`),
+            };
+        }
+    },
+
     // ══════ READ TOOLS ══════
     get_sales_today: {
         description: 'Ambil data penjualan hari ini: jumlah transaksi, omzet, profit',
@@ -759,7 +794,8 @@ Contoh penggunaan:
 5. Jawab dalam Bahasa Indonesia yang ramah dan profesional.
 6. Gunakan emoji dan format yang rapi.
 7. Jika user meminta sesuatu yang di luar kemampuan tools, jelaskan dengan sopan.
-8. JANGAN pernah mengarang data - selalu gunakan tool untuk cek data real.`;
+8. JANGAN pernah mengarang data - selalu gunakan tool untuk cek data real.
+9. Untuk pertanyaan STRATEGI / prediksi / "hari ini gimana" / cara kalahkan kompetitor: WAJIB panggil get_city_intel dulu, lalu rangkum battle plan-nya jadi 2-3 aksi konkret yang bisa langsung dijalankan hari ini.`;
 }
 
 // ─── Parse tool calls from AI response ───

@@ -33,6 +33,7 @@ const TOOL_LABELS = {
     generate_report: { icon: '📑', label: 'Laporan Bisnis Lengkap' },
     generate_product_image: { icon: '🎨', label: 'Buat Foto Produk AI' },
     generate_promo_image: { icon: '🎨', label: 'Buat Gambar Promo AI' },
+    get_city_intel: { icon: '🛰️', label: 'Intel Kota Palangka Raya' },
 };
 
 const STORAGE_KEY = 'cashlo_ai_conversations';
