@@ -2,6 +2,7 @@
 // scoped by owner_id passed in the request/tool params.
 import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 import { getSessionUser } from '@/lib/session';
+import { callChat, generateImage } from '@/lib/aiModels';
 
 // ============================================
 // CASHLO AUTONOMOUS AI AGENT
@@ -23,7 +24,7 @@ const TOOLS = {
             const { data } = await supabase
                 .from('transactions')
                 .select('*')
-                .eq('user_id', userId)
+                .eq('owner_id', userId)
                 .gte('datetime', startOfDay)
                 .neq('status', 'voided');
 
@@ -72,7 +73,7 @@ const TOOLS = {
             const { data } = await supabase
                 .from('transactions')
                 .select('*')
-                .eq('user_id', userId)
+                .eq('owner_id', userId)
                 .gte('datetime', start)
                 .lte('datetime', end)
                 .neq('status', 'voided');
@@ -100,7 +101,7 @@ const TOOLS = {
             const { data } = await supabase
                 .from('transactions')
                 .select('items')
-                .eq('user_id', userId)
+                .eq('owner_id', userId)
                 .gte('datetime', startOfMonth)
                 .neq('status', 'voided');
 
@@ -143,7 +144,8 @@ const TOOLS = {
 
             const { data: stocks } = await supabase
                 .from('product_stocks')
-                .select('product_id, quantity, min_stock_level');
+                .select('product_id, quantity, min_stock_level')
+                .eq('owner_id', userId);
 
             const productMap = {};
             products?.forEach(p => { productMap[p.id] = p; });
@@ -546,6 +548,165 @@ const TOOLS = {
                 message: `Supply "${name}" (${unit || 'pcs'}, min: ${min_stock || 10}) berhasil ditambahkan`
             };
         }
+    },
+
+    // ══════ MENU CONTROL TOOLS ══════
+    update_product: {
+        description: 'Update produk: ganti nama, kategori, harga jual, dan/atau harga modal. Parameter: product_name (string, nama produk saat ini), new_name (string, optional), new_category (string, optional), new_sell_price (number, optional), new_cost_price (number, optional)',
+        parameters: { product_name: 'string', new_name: 'string', new_category: 'string', new_sell_price: 'number', new_cost_price: 'number' },
+        requiresConfirmation: true,
+        execute: async (params, userId) => {
+            const { product_name, new_name, new_category, new_sell_price, new_cost_price } = params;
+            const { data: products } = await supabase
+                .from('products').select('*')
+                .eq('owner_id', userId).ilike('name', `%${product_name}%`).limit(1);
+            if (!products || products.length === 0) return { success: false, error: `Produk "${product_name}" tidak ditemukan` };
+
+            const updates = { updated_at: new Date().toISOString() };
+            if (new_name) updates.name = new_name;
+            if (new_category) updates.category = new_category;
+            if (typeof new_sell_price === 'number') updates.sell_price = new_sell_price;
+            if (typeof new_cost_price === 'number') updates.cost_price = new_cost_price;
+            if (Object.keys(updates).length === 1) return { success: false, error: 'Tidak ada perubahan yang diminta' };
+
+            const { error } = await supabase.from('products').update(updates).eq('id', products[0].id);
+            if (error) return { success: false, error: error.message };
+            return { success: true, message: `Produk "${products[0].name}" berhasil diupdate: ${Object.keys(updates).filter(k => k !== 'updated_at').join(', ')}` };
+        }
+    },
+
+    set_product_active: {
+        description: 'Aktifkan atau nonaktifkan produk dari menu (sembunyikan/tampilkan di kasir). Parameter: product_name (string), active (boolean)',
+        parameters: { product_name: 'string', active: 'boolean' },
+        requiresConfirmation: true,
+        execute: async (params, userId) => {
+            const { product_name, active } = params;
+            const { data: products } = await supabase
+                .from('products').select('id, name')
+                .eq('owner_id', userId).ilike('name', `%${product_name}%`).limit(1);
+            if (!products || products.length === 0) return { success: false, error: `Produk "${product_name}" tidak ditemukan` };
+
+            const { error } = await supabase.from('products').update({ is_active: !!active, updated_at: new Date().toISOString() }).eq('id', products[0].id);
+            if (error) return { success: false, error: error.message };
+            return { success: true, message: `Produk "${products[0].name}" sekarang ${active ? 'AKTIF di menu' : 'disembunyikan dari menu'}` };
+        }
+    },
+
+    get_categories: {
+        description: 'Ambil daftar kategori menu',
+        parameters: {},
+        requiresConfirmation: false,
+        execute: async (params, userId) => {
+            const { data } = await supabase.from('categories').select('name, "order"').eq('owner_id', userId).order('order');
+            return { kategori: data?.map(c => c.name) || [] };
+        }
+    },
+
+    add_category: {
+        description: 'Tambah kategori menu baru. Parameter: name (string)',
+        parameters: { name: 'string' },
+        requiresConfirmation: true,
+        execute: async (params, userId) => {
+            const { name } = params;
+            const { data: existing } = await supabase.from('categories').select('id').eq('owner_id', userId).ilike('name', name).limit(1);
+            if (existing && existing.length > 0) return { success: false, error: `Kategori "${name}" sudah ada` };
+            const { data: all } = await supabase.from('categories').select('"order"').eq('owner_id', userId);
+            const { error } = await supabase.from('categories').insert([{ id: `cat-${Date.now()}`, name, order: (all?.length || 0) + 1, owner_id: userId }]);
+            if (error) return { success: false, error: error.message };
+            return { success: true, message: `Kategori "${name}" berhasil ditambahkan` };
+        }
+    },
+
+    // ══════ REPORT TOOL ══════
+    generate_report: {
+        description: 'Kumpulkan SEMUA data untuk laporan bisnis lengkap satu periode (penjualan, profit, pengeluaran, produk terlaris, stok menipis, pelanggan top). Gunakan saat user minta "laporan" / "report". Parameter: start_date (YYYY-MM-DD), end_date (YYYY-MM-DD)',
+        parameters: { start_date: 'string', end_date: 'string' },
+        requiresConfirmation: false,
+        execute: async (params, userId) => {
+            const { start_date, end_date } = params;
+            const start = new Date(start_date).toISOString();
+            const end = new Date(end_date + 'T23:59:59').toISOString();
+
+            const [{ data: txns }, { data: expenses }, { data: stocks }, { data: customers }] = await Promise.all([
+                supabase.from('transactions').select('*').eq('owner_id', userId).gte('datetime', start).lte('datetime', end).neq('status', 'voided'),
+                supabase.from('expenses').select('*').eq('owner_id', userId).gte('date', start_date).lte('date', end_date),
+                supabase.from('product_stocks').select('quantity, min_stock_level, products(name)').eq('owner_id', userId),
+                supabase.from('customers').select('name, points, total_spend').eq('owner_id', userId).order('total_spend', { ascending: false }).limit(5),
+            ]);
+
+            const revenue = txns?.reduce((s, t) => s + (t.subtotal || 0), 0) || 0;
+            const profit = txns?.reduce((s, t) => s + (t.total_profit || 0), 0) || 0;
+            const totalExpenses = expenses?.reduce((s, e) => s + parseFloat(e.amount || 0), 0) || 0;
+
+            const productSales = {};
+            const byDay = {};
+            const byPayment = {};
+            txns?.forEach(t => {
+                const day = (t.datetime || '').slice(0, 10);
+                byDay[day] = (byDay[day] || 0) + (t.subtotal || 0);
+                byPayment[t.payment_method || 'lainnya'] = (byPayment[t.payment_method || 'lainnya'] || 0) + (t.subtotal || 0);
+                try {
+                    JSON.parse(t.items || '[]').forEach(i => {
+                        if (!productSales[i.name]) productSales[i.name] = { qty: 0, revenue: 0 };
+                        productSales[i.name].qty += i.qty || 0;
+                        productSales[i.name].revenue += i.total_sell || 0;
+                    });
+                } catch (e) { }
+            });
+
+            return {
+                periode: `${start_date} s/d ${end_date}`,
+                transaksi: txns?.length || 0,
+                omzet: revenue,
+                gross_profit: profit,
+                pengeluaran: totalExpenses,
+                net_profit: profit - totalExpenses,
+                penjualan_per_hari: byDay,
+                metode_pembayaran: byPayment,
+                produk_terlaris: Object.entries(productSales).sort((a, b) => b[1].qty - a[1].qty).slice(0, 10)
+                    .map(([name, d]) => ({ name, qty: d.qty, revenue: d.revenue })),
+                stok_menipis: stocks?.filter(s => parseFloat(s.quantity) <= (s.min_stock_level || 10)).map(s => `${s.products?.name}: ${s.quantity}`) || [],
+                pelanggan_top: customers || [],
+                detail_pengeluaran: expenses?.map(e => `${e.date} ${e.category}: Rp ${parseFloat(e.amount).toLocaleString('id-ID')}`) || []
+            };
+        }
+    },
+
+    // ══════ IMAGE GENERATION TOOLS ══════
+    generate_product_image: {
+        description: 'Buat foto produk profesional dengan AI (untuk menu, sosmed, promosi). Parameter: product_name (string), style (string, optional: "foto studio"|"aesthetic cafe"|"minimalis")',
+        parameters: { product_name: 'string', style: 'string' },
+        requiresConfirmation: false,
+        execute: async (params, userId) => {
+            const { product_name, style } = params;
+            const styleMap = {
+                'foto studio': 'professional studio product photography, softbox lighting, clean background',
+                'aesthetic cafe': 'aesthetic indonesian coffee shop ambience, warm tones, wooden table, natural window light, bokeh',
+                'minimalis': 'minimalist product photography, single color background, elegant composition',
+            };
+            const styleDesc = styleMap[(style || '').toLowerCase()] || styleMap['aesthetic cafe'];
+            const prompt = `${product_name}, indonesian cafe menu item, ${styleDesc}, highly detailed, appetizing, commercial photography, 4k`;
+            const { dataUrl, model } = await generateImage(prompt, { negativePrompt: 'text, watermark, logo, low quality, blurry, deformed' });
+            return { success: true, message: `🎨 Gambar "${product_name}" berhasil dibuat (model: ${model.split('/')[1]})`, image: dataUrl };
+        }
+    },
+
+    generate_promo_image: {
+        description: 'Buat gambar promosi/poster untuk sosmed (Instagram/WhatsApp) berdasarkan tema promo. Parameter: theme (string, deskripsi promo misal "diskon 20% kopi susu akhir pekan"), mood (string, optional: "ceria"|"elegan"|"hangat")',
+        parameters: { theme: 'string', mood: 'string' },
+        requiresConfirmation: false,
+        execute: async (params, userId) => {
+            const { theme, mood } = params;
+            const moodMap = {
+                'ceria': 'vibrant cheerful colors, playful composition, festive',
+                'elegan': 'elegant premium dark tones, gold accents, luxurious',
+                'hangat': 'warm cozy atmosphere, caramel brown palette, soft light',
+            };
+            const moodDesc = moodMap[(mood || '').toLowerCase()] || moodMap['hangat'];
+            const prompt = `social media promotional image for an indonesian coffee shop, theme: ${theme}, ${moodDesc}, coffee cups and pastry props, professional advertising photography, square composition, no text`;
+            const { dataUrl, model } = await generateImage(prompt, { negativePrompt: 'text, letters, words, watermark, low quality, blurry' });
+            return { success: true, message: `🎨 Gambar promo "${theme}" berhasil dibuat (model: ${model.split('/')[1]}). Tinggal tambahkan teks promo di Canva/IG Story!`, image: dataUrl };
+        }
     }
 };
 
@@ -631,7 +792,7 @@ async function getQuickContext(userId) {
 
     const [{ data: monthTxns }, { data: products }] = await Promise.all([
         supabase.from('transactions').select('subtotal, total_profit')
-            .eq('user_id', userId).gte('datetime', startOfMonth).neq('status', 'voided'),
+            .eq('owner_id', userId).gte('datetime', startOfMonth).neq('status', 'voided'),
         supabase.from('products').select('id').eq('owner_id', userId).eq('is_active', true)
     ]);
 
@@ -642,47 +803,10 @@ async function getQuickContext(userId) {
     };
 }
 
-// ─── Call AI model ───
+// ─── Call AI model (shared free-model chain in lib/aiModels.js) ───
 async function callModel(messages) {
-    const apiKey = process.env.HUGGINGFACE_API_KEY;
-    if (!apiKey) throw new Error('HUGGINGFACE_API_KEY not set');
-
-    const models = [
-        'google/gemma-4-12B-it',
-        'google/gemma-3-27b-it',
-        'Qwen/Qwen2.5-72B-Instruct',
-    ];
-
-    for (const model of models) {
-        try {
-            const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model,
-                    messages,
-                    max_tokens: 1536,
-                    temperature: 0.4 // Lower temp for more reliable tool calling
-                })
-            });
-
-            const data = await response.json();
-            if (data.error) {
-                console.warn(`Model ${model} failed:`, data.error);
-                continue;
-            }
-
-            return data.choices?.[0]?.message?.content || '';
-        } catch (e) {
-            console.warn(`Model ${model} error:`, e.message);
-            continue;
-        }
-    }
-
-    throw new Error('All AI models unavailable');
+    const { content } = await callChat(messages, { maxTokens: 1536, temperature: 0.4 });
+    return content;
 }
 
 // ============================================
@@ -703,8 +827,13 @@ export default async function handler(req, res) {
 
     const { message, contextMessages, confirmAction } = req.body;
 
+    const isAdmin = session.role === 'admin';
+
     // ─── Handle action confirmation ───
     if (confirmAction) {
+        if (!isAdmin) {
+            return res.status(403).json({ error: 'Hanya admin yang bisa mengkonfirmasi aksi tulis' });
+        }
         const { tool, params } = confirmAction;
         const toolDef = TOOLS[tool];
         if (!toolDef) {
@@ -713,9 +842,12 @@ export default async function handler(req, res) {
 
         try {
             const result = await toolDef.execute(params, userId);
+            const images = result.image ? [result.image] : [];
+            if (result.image) delete result.image;
             return res.status(200).json({
                 response: result.message || JSON.stringify(result),
                 actionResult: result,
+                images,
                 toolsUsed: [{ tool, params, result, confirmed: true }]
             });
         } catch (e) {
@@ -747,6 +879,7 @@ export default async function handler(req, res) {
 
         const toolsUsed = [];
         const pendingActions = [];
+        const images = []; // generated images (data URLs) for the client
         let iteration = 0;
 
         // ─── AGENT LOOP ───
@@ -762,7 +895,8 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     response: finalText,
                     toolsUsed,
-                    pendingActions
+                    pendingActions,
+                    images
                 });
             }
 
@@ -774,6 +908,16 @@ export default async function handler(req, res) {
                 if (!toolDef) {
                     toolResultsText += `\n[Tool Error] Tool "${call.tool}" tidak ditemukan.\n`;
                     continue;
+                }
+
+                const isGenerative = call.tool.startsWith('generate_product_image') || call.tool.startsWith('generate_promo_image');
+
+                if (toolDef.requiresConfirmation || isGenerative) {
+                    if (!isAdmin) {
+                        toolResultsText += `\n[Tool Error: ${call.tool}] Hanya admin yang boleh menggunakan tool ini. User saat ini berperan kasir.\n`;
+                        toolsUsed.push({ tool: call.tool, params: call.params, result: { error: 'admin only' }, confirmed: false });
+                        continue;
+                    }
                 }
 
                 if (toolDef.requiresConfirmation) {
@@ -789,6 +933,13 @@ export default async function handler(req, res) {
                     // Execute READ tool immediately
                     try {
                         const result = await toolDef.execute(call.params || {}, userId);
+                        // Generated images: hand to client, NEVER into the model
+                        // context (base64 would blow the prompt size).
+                        if (result && result.image) {
+                            images.push(result.image);
+                            delete result.image;
+                            result.image_note = 'Gambar berhasil dibuat dan sudah ditampilkan ke user.';
+                        }
                         toolResultsText += `\n[Tool Result: ${call.tool}]\n${JSON.stringify(result, null, 2)}\n`;
                         toolsUsed.push({ tool: call.tool, params: call.params, result, confirmed: true });
                     } catch (e) {
@@ -811,7 +962,8 @@ export default async function handler(req, res) {
         return res.status(200).json({
             response: 'Agent telah mencapai batas iterasi. Silakan coba pertanyaan yang lebih spesifik.',
             toolsUsed,
-            pendingActions
+            pendingActions,
+            images
         });
 
     } catch (error) {

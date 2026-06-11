@@ -26,6 +26,13 @@ const TOOL_LABELS = {
     add_expense: { icon: '💸', label: 'Catat Pengeluaran' },
     add_customer: { icon: '👤', label: 'Daftarkan Pelanggan' },
     add_supply: { icon: '🏭', label: 'Tambah Supply' },
+    update_product: { icon: '✏️', label: 'Update Produk' },
+    set_product_active: { icon: '👁️', label: 'Tampilkan/Sembunyikan Menu' },
+    get_categories: { icon: '📂', label: 'Daftar Kategori' },
+    add_category: { icon: '📂', label: 'Tambah Kategori' },
+    generate_report: { icon: '📑', label: 'Laporan Bisnis Lengkap' },
+    generate_product_image: { icon: '🎨', label: 'Buat Foto Produk AI' },
+    generate_promo_image: { icon: '🎨', label: 'Buat Gambar Promo AI' },
 };
 
 const STORAGE_KEY = 'cashlo_ai_conversations';
@@ -424,6 +431,7 @@ export default function AIPage() {
                 content: data.error ? `Error: ${data.error}` : data.response,
                 toolsUsed: data.toolsUsed || [],
                 pendingActions: data.pendingActions || [],
+                generatedImages: data.images || [],
                 timestamp: new Date()
             };
 
@@ -768,6 +776,19 @@ export default function AIPage() {
                                                 className="ai-message-text"
                                                 dangerouslySetInnerHTML={{ __html: formatMessageContent(msg.content) }}
                                             />
+                                            {/* AI-generated images (download-ready) */}
+                                            {msg.generatedImages && msg.generatedImages.length > 0 && (
+                                                <div className="ai-generated-images">
+                                                    {msg.generatedImages.map((img, gidx) => (
+                                                        <div key={gidx} className="ai-generated-image">
+                                                            <img src={img} alt={`AI generated ${gidx + 1}`} />
+                                                            <a href={img} download={`cashlo-ai-${Date.now()}-${gidx + 1}.png`} className="btn btn-sm btn-outline">
+                                                                ⬇️ Download
+                                                            </a>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                             {/* Pending action cards */}
                                             {msg.pendingActions && msg.pendingActions.length > 0 && (
                                                 <div className="ai-pending-actions">
@@ -817,6 +838,7 @@ export default function AIPage() {
                                                                                         role: 'assistant',
                                                                                         content: `✅ ${result.response || result.actionResult?.message || 'Aksi berhasil dijalankan'}`,
                                                                                         toolsUsed: [{ tool: action.tool, confirmed: true }],
+                                                                                        generatedImages: result.images || [],
                                                                                         timestamp: new Date()
                                                                                     });
                                                                                     return updated;
