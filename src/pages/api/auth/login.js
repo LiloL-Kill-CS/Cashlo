@@ -8,9 +8,31 @@ function sha256hex(s) {
     return crypto.createHash('sha256').update(s).digest('hex');
 }
 
+// In-memory rate limiter: max 5 login attempts per IP per 15 minutes.
+// For multi-instance deployments replace with Redis or Upstash.
+const _attempts = new Map();
+function checkRateLimit(ip) {
+    const now = Date.now();
+    const WINDOW = 15 * 60 * 1000;
+    const MAX = 5;
+    let entry = _attempts.get(ip);
+    if (!entry || now > entry.resetAt) entry = { count: 0, resetAt: now + WINDOW };
+    entry.count++;
+    _attempts.set(ip, entry);
+    if (entry.count > MAX) return { limited: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+    return { limited: false };
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    const { limited, retryAfter } = checkRateLimit(ip);
+    if (limited) {
+        res.setHeader('Retry-After', String(retryAfter));
+        return res.status(429).json({ error: `Terlalu banyak percobaan login. Coba lagi dalam ${Math.ceil(retryAfter / 60)} menit.` });
     }
 
     const { username, password } = req.body || {};

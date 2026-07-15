@@ -1169,11 +1169,27 @@ a:hover {
     width: 100%;
     height: var(--mobile-nav-height);
     flex-direction: row;
-    justify-content: space-around;
+    justify-content: flex-start;
     padding: var(--spacing-sm) 0;
     border-right: none;
     border-top: 1px solid var(--color-border);
     z-index: 100;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    /* Scrolling shadows: orange edge glow appears only while more icons
+       are off-screen, vanishes at the scroll ends (background-attachment
+       local/scroll trick — no JS needed) */
+    background:
+      linear-gradient(to right, var(--color-bg-secondary) 30%, transparent),
+      linear-gradient(to left, var(--color-bg-secondary) 30%, transparent) 100% 0,
+      radial-gradient(farthest-side at 0 50%, rgba(201, 138, 75, 0.45), transparent),
+      radial-gradient(farthest-side at 100% 50%, rgba(201, 138, 75, 0.45), transparent) 100% 0;
+    background-color: var(--color-bg-secondary);
+    background-repeat: no-repeat;
+    background-size: 44px 100%, 44px 100%, 16px 100%, 16px 100%;
+    background-attachment: local, local, scroll, scroll;
   }
 
   .sidebar-logo {
@@ -1183,13 +1199,17 @@ a:hover {
   .sidebar-nav {
     flex-direction: row;
     gap: 0;
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     justify-content: space-around;
+    padding: 0 var(--spacing-xs);
   }
 
   .sidebar-link {
+    flex: 0 0 auto;
     width: 44px;
     height: 44px;
+    scroll-snap-align: center;
   }
 
   .sidebar-link svg {

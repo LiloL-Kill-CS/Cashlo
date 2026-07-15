@@ -369,7 +369,7 @@ export default function DashboardPage() {
                                 <p className="text-xl font-bold text-success">{user?.role === 'admin' ? formatCurrency(stats.profit) : '***'}</p>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px' }}>
                                     <span style={{ color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cash: {user?.role === 'admin' ? formatCurrency(stats.profitCash) : '***'}</span>
-                                    <span style={{ color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {user?.role === 'admin' ? formatCurrency(stats.profitQris) : '***'}</span>
+                                    <span style={{ color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {user?.role === 'admin' ? formatCurrency(stats.profitQr) : '***'}</span>
                                 </div>
                             </div>
                         </div>
@@ -386,8 +386,8 @@ export default function DashboardPage() {
                                     {user?.role === 'admin' ? formatCurrency(stats.netProfit) : '***'}
                                 </p>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px' }}>
-                                    <span style={{ color: stats.netProfitCash >= 0 ? 'var(--color-success)' : 'var(--color-error)', background: 'var(--color-success-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cash: {user?.role === 'admin' ? formatCurrency(stats.netProfitCash) : '***'}</span>
-                                    <span style={{ color: stats.netProfitQris >= 0 ? 'var(--color-info)' : 'var(--color-error)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {user?.role === 'admin' ? formatCurrency(stats.netProfitQris) : '***'}</span>
+                                    <span style={{ color: stats.netCash >= 0 ? 'var(--color-success)' : 'var(--color-error)', background: 'var(--color-success-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cash: {user?.role === 'admin' ? formatCurrency(stats.netCash) : '***'}</span>
+                                    <span style={{ color: stats.netQr >= 0 ? 'var(--color-info)' : 'var(--color-error)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: '4px' }}>QRIS: {user?.role === 'admin' ? formatCurrency(stats.netQr) : '***'}</span>
                                 </div>
                             </div>
                         </div>
