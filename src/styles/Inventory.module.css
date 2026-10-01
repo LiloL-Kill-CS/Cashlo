@@ -45,6 +45,12 @@
 .capacity { margin:12px 0 22px; display:flex; gap:10px; justify-content:space-between; flex-wrap:wrap; font-size:11px; }
 .capacity b { color:#e5d4bf; font-weight:600; }
 .capacity span { color:#b6a694; }
+.menuCapacity { margin:12px 0 22px; color:#b6a694; font-size:11px; }
+.menuCapacity > span { display:block; margin-bottom:9px; }
+.menuCapacity ul { list-style:none; display:grid; gap:7px; padding:0; }
+.menuCapacity li { display:flex; justify-content:space-between; gap:6px 12px; flex-wrap:wrap; padding:7px 0; border-top:1px solid #3b3127; min-width:0; }
+.menuCapacity b, .menuCapacity li span { min-width:0; overflow-wrap:anywhere; }
+.menuCapacity b { color:#e5d4bf; font-weight:600; }
 .itemActions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .itemFooter { display:flex; gap:16px; justify-content:center; margin-top:14px; }
 .itemFooter button { background:none; border:none; padding:8px 3px; color:#baaa98; font:inherit; font-size:11px; cursor:pointer; min-height:44px; }
@@ -90,9 +96,29 @@
 .formBody input, .formBody select, .formBody textarea { background:#100e0b; border-color:#54422f; color:#f4e7d7; min-height:44px; width:100%; min-width:0; }
 .formGrid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; }
 .formGrid small, .help { color:#b8a18a; font-size:11px; line-height:1.7; }
+.formBody label small { color:#b8a18a; font-size:11px; line-height:1.6; }
+.menuEditor { display:grid; gap:14px; padding:17px; border:1px solid #58432c; border-radius:12px; background:#211910; }
+.menuEditorHeader { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.menuEditorHeader h3 { font-size:15px; margin-bottom:5px; }
+.menuEditorHeader p { color:#bea993; font-size:11px; line-height:1.5; }
+.commonDose { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.menuTools { display:flex; flex-wrap:wrap; gap:8px; }
+.menuTools button { flex:1 1 135px; min-width:0; white-space:normal; }
+.menuEditor .warningText { font-size:12px; line-height:1.5; }
+.menuRow { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:10px; align-items:end; padding-top:13px; border-top:1px solid #443325; min-width:0; }
+.menuRow label:first-child { grid-column:1 / -1; }
+.menuRow label:nth-child(2) { grid-column:1; }
+.menuRow label:nth-child(3) { grid-column:2; }
+.menuRow .removeMenu { grid-column:3; grid-row:2; }
+.menuRow label { overflow-wrap:anywhere; }
+.removeMenu { min-height:44px; padding:9px 11px; border:1px solid #684539; border-radius:10px; background:#30201b; color:#ffd4c8; font:600 12px var(--font-family); cursor:pointer; }
+.removeMenu:hover { background:#4b2b22; }
+.inlineLink { color:#f2c491; text-decoration:underline; text-underline-offset:3px; }
+.inlineLink:focus-visible { outline:2px solid #efc393; outline-offset:3px; }
 .preview { padding:18px; background:#302316; border:1px solid #62452a; border-radius:12px; display:flex; flex-direction:column; gap:7px; }
 .preview span { font-size:11px; color:#c6ab8c; }
 .preview strong { font-size:21px; color:#f2c491; }
+.preview strong, .preview p { overflow-wrap:anywhere; }
 .preview p { font-size:12px; }
 .selectedItem h3 { font-size:16px; margin-bottom:8px; }
 .selectedItem p { color:#bfa98e; font-size:12px; }
@@ -104,4 +130,7 @@
     .tabs { gap:20px; } .tabs button { font-size:12px; } .toolbar { gap:12px; } .search { max-width:none; } .filters { width:100%; } .filters button { flex:1; min-height:44px; }
     .grid { grid-template-columns:1fr; gap:14px; } .item { padding:20px; } .onboarding { grid-template-columns:1fr; padding:22px; gap:24px; } .onboarding h2 { font-size:23px; } .onboarding p { font-size:13px; }
     .overlay { padding:12px; } .dialog { max-height:90dvh; } .dialogHeader { padding:16px 18px; } .formBody { padding:20px 18px; gap:18px; } .formFooter { padding:16px 18px; } .formGrid { gap:12px; } .formFooter button { flex:1; } .location { padding:18px; }
+    .menuEditor { padding:14px; } .menuEditorHeader { flex-direction:column; }
+    .commonDose { grid-template-columns:1fr; } .menuTools { flex-direction:column; } .menuTools button { flex:1 1 auto; width:100%; }
+    .menuRow { grid-template-columns:1fr; } .menuRow label:first-child, .menuRow label:nth-child(2), .menuRow label:nth-child(3), .menuRow .removeMenu { grid-column:1; grid-row:auto; } .removeMenu { width:100%; }
 }

@@ -14,6 +14,7 @@ await mkdir(artifactDir, { recursive: true });
 const dataDir = await mkdtemp(path.join(artifactDir, 'stock-db-'));
 let db = await createStockTestDatabase(dataDir);
 await db.exec("insert into users(id,name,username,password_hash,role,owner_id) values ('test-owner','Test Cafe','test-cafe','!no-login!','admin','test-owner')");
+await db.exec("insert into products(id,name,owner_id) values ('test-latte','Vanilla Latte','test-owner'),('test-caramel','Caramel Coffee','test-owner')");
 let appRole = 'admin';
 let refreshFailure = false;
 let failMutation = false;
@@ -49,6 +50,17 @@ await context.route('**/rest/v1/**', async route => {
                 return (await tx.query('select * from public.supplies order by name')).rows;
             }
             if (endpoint === 'supply_stock_logs') return (await tx.query('select * from public.supply_stock_logs order by created_at desc limit 50')).rows;
+            if (endpoint === 'products') return (await tx.query('select id,name from public.products order by name')).rows;
+            if (endpoint === 'supply_menu_links') return (await tx.query("select l.*,jsonb_build_object('name',p.name) as products from public.supply_menu_links l join public.products p on p.id=l.product_id")).rows;
+            if (endpoint === 'rpc/save_supply_with_menus') {
+                const input = request.postDataJSON();
+                return (await tx.query('select * from public.save_supply_with_menus($1::jsonb,$2::jsonb)', [JSON.stringify(input.p_data), JSON.stringify(input.p_menus)])).rows;
+            }
+            if (endpoint === 'rpc/consume_supply_menu') {
+                stockCalls++;
+                const input = request.postDataJSON();
+                return (await tx.query('select * from public.consume_supply_menu($1,$2,$3,$4)', [input.p_supply_id,input.p_product_id,input.p_servings,input.p_note])).rows[0];
+            }
             if (endpoint === 'rpc/create_supply') return (await tx.query('select * from public.create_supply($1::jsonb)', [JSON.stringify(request.postDataJSON().p_data)])).rows;
             if (endpoint === 'rpc/adjust_supply_stock') {
                 stockCalls++;
@@ -80,16 +92,16 @@ try {
     await modal().getByLabel('Nama item', { exact: true }).fill('Syrup vanilla');
     await modal().getByLabel('Porsi per kemasan').fill('50');
     await modal().getByLabel('Ingatkan saat sisa').fill('150');
-    await expectText(modal(), '15 ml / kopi');
+    await expectText(modal(), '15 ml');
     await modal().getByRole('button', { name: 'Simpan', exact: true }).click();
     await waitClosed(); await card('Syrup vanilla').waitFor();
     await expectText(card('Syrup vanilla'), '750');
     check('create bottle with saved yield and opening stock');
     await card('Syrup vanilla').getByRole('button', { name: 'Catat pakai' }).click();
-    await modal().getByLabel('Jumlah kopi yang dibuat').fill('30');
+    await modal().getByLabel('Jumlah porsi yang dibuat').fill('30');
     await expectText(modal(), '300 ml tersisa');
     await modal().getByRole('button', { name: 'Simpan pemakaian' }).click();
-    await waitClosed(); await expectText(card('Syrup vanilla'), '≈ 20 kopi');
+    await waitClosed(); await expectText(card('Syrup vanilla'), '≈ 20 porsi');
     assert.equal(Number((await db.query("select stock from supplies where name='Syrup vanilla'")).rows[0].stock), 300);
     check('30 coffees leave 300 ml and 20 portions');
     await card('Syrup vanilla').getByRole('button', { name: 'Catat pakai' }).click();
@@ -105,10 +117,10 @@ try {
     await modal().getByLabel('Jumlah stok sebenarnya').fill('300');
     await modal().getByRole('button', { name: 'Simpan', exact: true }).click(); await waitClosed();
     check('repeated submit applies usage once');
-    await page.reload(); await expectText(card('Syrup vanilla'), '≈ 20 kopi');
+    await page.reload(); await expectText(card('Syrup vanilla'), '≈ 20 porsi');
     check('saved stock survives page reload');
     await card('Syrup vanilla').getByRole('button', { name: 'Catat pakai' }).click();
-    await modal().getByLabel('Jumlah kopi yang dibuat').fill('21');
+    await modal().getByLabel('Jumlah porsi yang dibuat').fill('21');
     assert.equal(await modal().getByRole('button', { name: 'Simpan pemakaian' }).isDisabled(), true);
     await page.keyboard.press('Escape'); await waitClosed();
     check('overspend disabled and dialog Escape closes');
@@ -124,7 +136,7 @@ try {
     await modal().getByRole('button', { name: 'Simpan isi ulang' }).click(); await waitClosed();
     assert.equal(Number((await db.query("select stock from supplies where name='Syrup premium'")).rows[0].stock), 1050);
     await page.getByRole('alert').filter({ hasText: 'tersimpan' }).waitFor();
-    await page.reload(); await expectText(card('Syrup premium'), '≈ 70 kopi');
+    await page.reload(); await expectText(card('Syrup premium'), '≈ 70 porsi');
     check('restock uses saved pack; refresh failure does not encourage repeat write');
     await card('Syrup premium').getByRole('button', { name: 'Catat pakai' }).click();
     failMutation = true;
@@ -139,7 +151,7 @@ try {
     assert.equal(await card('Syrup premium').getByRole('button', { name: 'Catat pakai' }).isDisabled(), true);
     await card('Syrup premium').getByRole('button', { name: '+ Isi ulang' }).click();
     await modal().getByRole('button', { name: 'Simpan isi ulang' }).click(); await waitClosed();
-    await expectText(card('Syrup premium'), '≈ 50 kopi');
+    await expectText(card('Syrup premium'), '≈ 50 porsi');
     check('empty item can be refilled without entering details again');
     await page.getByRole('button', { name: '+ Tambah item', exact: true }).click();
     await modal().getByLabel('Nama item', { exact: true }).fill('Gula');
@@ -151,12 +163,54 @@ try {
     await modal().getByRole('button', { name: 'Simpan pemakaian' }).click(); await waitClosed();
     assert.equal(Number((await db.query("select stock from supplies where name='Gula'")).rows[0].stock), 874.5);
     check('arbitrary supply with decimal base-unit usage');
+    await card('Syrup premium').getByRole('button', { name: 'Edit item' }).click();
+    assert.equal(await modal().getByLabel('Nama porsi', { exact: true }).count(), 0);
+    assert.equal(await modal().getByLabel('Takaran umum (ml / porsi)', { exact: true }).inputValue(), '15');
+    assert.equal(await modal().getByLabel('Variasi umum (± ml / porsi)', { exact: true }).inputValue(), '3');
+    await modal().getByRole('button', { name: '+ Hubungkan menu', exact: true }).click();
+    await modal().getByLabel('Menu 1', { exact: true }).selectOption('test-latte');
+    await modal().getByRole('button', { name: 'Hubungkan semua menu', exact: true }).click();
+    await modal().getByLabel('Menu 2', { exact: true }).selectOption('test-caramel');
+    assert.equal(await modal().getByLabel('Menu 2', { exact: true }).locator('option[value="test-latte"]').count(), 0);
+    await modal().getByLabel('Takaran menu 2 (ml / porsi)', { exact: true }).fill('20');
+    await modal().getByLabel('Variasi menu 2 (± ml)', { exact: true }).fill('2');
+    await modal().getByRole('button', { name: 'Simpan', exact: true }).click(); await waitClosed();
+    const links = (await db.query('select product_id,quantity_per_serving,quantity_tolerance from supply_menu_links order by product_id')).rows;
+    assert.deepEqual(links.map(row => [row.product_id,Number(row.quantity_per_serving),Number(row.quantity_tolerance)]), [['test-caramel',20,2],['test-latte',15,3]]);
+    assert.equal(Number((await db.query("select stock from supplies where name='Syrup premium'")).rows[0].stock), 750);
+    check('existing menu picker links all menus; per-menu dose and variation edits preserve stock');
+    for (const [productId,expected] of [['test-latte',600],['test-caramel',400]]) {
+        await card('Syrup premium').getByRole('button', { name: 'Catat pakai' }).click();
+        await modal().getByLabel('Menu yang dibuat', { exact: true }).selectOption(productId);
+        await modal().getByLabel('Jumlah porsi yang dibuat', { exact: true }).fill('10');
+        await expectText(modal(), productId === 'test-latte' ? '120–180' : '180–220');
+        await modal().getByRole('button', { name: 'Simpan pemakaian' }).click(); await waitClosed();
+        assert.equal(Number((await db.query("select stock from supplies where name='Syrup premium'")).rows[0].stock), expected);
+    }
+    await page.reload(); await card('Syrup premium').filter({ hasText: 'Vanilla Latte' }).waitFor();
+    await expectText(card('Syrup premium'), 'Caramel Coffee');
+    assert.equal((await db.query("select count(*)::int n from supply_stock_logs where product_name in ('Vanilla Latte','Caramel Coffee') and quantity_per_serving in (15,20)")).rows[0].n, 2);
+    check('mixed menu usage debits shared stock and keeps menu/dose history across reload');
+    await card('Syrup premium').getByRole('button', { name: 'Edit item' }).click();
+    await modal().getByLabel('Takaran umum (ml / porsi)', { exact: true }).fill('15');
+    await modal().getByLabel('Variasi umum (± ml / porsi)', { exact: true }).fill('3');
+    await modal().getByRole('button', { name: 'Terapkan ke semua menu terhubung', exact: true }).click();
+    for (const index of [1,2]) {
+        assert.equal(await modal().getByLabel(`Takaran menu ${index} (ml / porsi)`, { exact: true }).inputValue(), '15');
+        assert.equal(await modal().getByLabel(`Variasi menu ${index} (± ml)`, { exact: true }).inputValue(), '3');
+    }
+    await modal().getByRole('button', { name: 'Simpan', exact: true }).click(); await waitClosed();
+    await page.reload(); await card('Syrup premium').filter({ hasText: 'Vanilla Latte' }).waitFor();
+    assert.equal((await db.query('select count(*)::int n from supply_menu_links where quantity_per_serving=15 and quantity_tolerance=3')).rows[0].n, 2);
+    assert.equal(Number((await db.query("select stock from supplies where name='Syrup premium'")).rows[0].stock), 400);
+    check('apply 15 ml and variation to all linked menus with one action, persisted without stock changes');
     await page.getByLabel('Cari bahan atau perlengkapan').fill('Gula');
     assert.equal(await page.getByRole('article').count(), 1);
     await page.getByLabel('Cari bahan atau perlengkapan').fill('');
     await page.getByRole('button', { name: 'Riwayat bahan', exact: true }).click();
     await page.getByRole('cell', { name: 'Pemakaian', exact: true }).first().waitFor();
     await page.getByRole('cell', { name: '300 ml', exact: true }).first().waitFor();
+    await page.getByRole('cell', { name: 'Vanilla Latte', exact: true }).first().waitFor();
     check('search and history with unit/name snapshots');
     await page.getByRole('button', { name: 'Bahan & perlengkapan', exact: true }).click();
     await page.screenshot({ path: path.join(artifactDir, 'inventory-desktop.png'), fullPage: true });
@@ -181,7 +235,7 @@ try {
             const bounds = await page.getByRole('button', { name: button, exact: true }).first().boundingBox();
             assert.ok(bounds.height >= 44, `Small touch target ${button}: ${device.name}`);
         }
-        await page.getByRole('button', { name: '+ Tambah item', exact: true }).click();
+        await card('Syrup premium').getByRole('button', { name: 'Edit item', exact: true }).click();
         const bounds = await modal().boundingBox();
         assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= device.width, `Dialog clipped: ${device.name}`);
         assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= device.height, `Dialog too tall: ${device.name}`);
@@ -221,6 +275,13 @@ try {
     await page.keyboard.press('Escape');
     await page.screenshot({ path: path.join(artifactDir, 'inventory-mobile.png'), fullPage: true });
     check('mobile layout, dialog, and secondary navigation');
+    await card('Syrup premium').getByRole('button', { name: 'Edit item' }).click();
+    await modal().getByRole('button', { name: /^Hapus Menu/ }).last().click();
+    await modal().getByRole('button', { name: 'Simpan', exact: true }).click(); await waitClosed();
+    assert.equal((await db.query('select count(*)::int n from supply_menu_links')).rows[0].n, 1);
+    assert.equal(Number((await db.query("select stock from supplies where name='Syrup premium'")).rows[0].stock), 400);
+    assert.equal((await db.query("select count(*)::int n from supply_stock_logs where product_name is not null")).rows[0].n, 2);
+    check('unlinking a menu preserves shared balance and historical menu snapshots');
     appRole = 'kasir';
     await page.reload(); await card('Gula').waitFor();
     assert.equal(await page.getByRole('button', { name: '+ Tambah item', exact: true }).count(), 0);
@@ -230,7 +291,8 @@ try {
     await browser.close(); await db.close();
     db = await createStockTestDatabase(dataDir, { existing: true });
     const persisted = (await db.query('select name,stock from supplies order by name')).rows;
-    assert.deepEqual(persisted.map(row => [row.name, Number(row.stock)]), [['Gula', 874.5], ['Syrup premium', 750]]);
+    assert.deepEqual(persisted.map(row => [row.name, Number(row.stock)]), [['Gula', 874.5], ['Syrup premium', 400]]);
+    assert.equal((await db.query('select count(*)::int n from supply_menu_links')).rows[0].n, 1);
     check('stock persists after PostgreSQL shutdown and reopening');
     console.log(`PASS ${checks} browser checks; no runtime errors. Screenshots: ${artifactDir}`);
 } catch (error) {

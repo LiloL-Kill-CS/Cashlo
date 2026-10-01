@@ -12,3 +12,13 @@ test('PostgreSQL migration: atomic stock, reusable items, precision, ledger, own
         assert.equal((await db.query('select count(*)::int n from public.users')).rows[0].n, 0);
     } finally { await db.close(); }
 });
+
+test('PostgreSQL menu links: shared stock, custom doses, variation, atomic save, history and owner isolation', async () => {
+    const db = await createStockTestDatabase();
+    try {
+        await db.exec(await readFile(new URL('../docs/sql/inventory-supply-menus.rollback-test.sql', import.meta.url), 'utf8'));
+        for (const table of ['supplies', 'supply_stock_logs', 'supply_menu_links', 'products', 'users']) {
+            assert.equal((await db.query(`select count(*)::int n from public.${table}`)).rows[0].n, 0, `Residual rows in ${table}`);
+        }
+    } finally { await db.close(); }
+});

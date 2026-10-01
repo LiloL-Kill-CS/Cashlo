@@ -8,6 +8,8 @@ export function useInventory(userId, userRole, ownerId) {
     const [logs, setLogs] = useState([]);
     const [supplies, setSupplies] = useState([]);
     const [supplyLogs, setSupplyLogs] = useState([]);
+    const [supplyMenus, setSupplyMenus] = useState([]);
+    const [menuProducts, setMenuProducts] = useState([]);
     const [suppliesLoading, setSuppliesLoading] = useState(true);
     const [supplyError, setSupplyError] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -23,6 +25,8 @@ export function useInventory(userId, userRole, ownerId) {
     useEffect(() => {
         setSupplies([]);
         setSupplyLogs([]);
+        setSupplyMenus([]);
+        setMenuProducts([]);
         setSupplyError(null);
         if (ownerId) {
             loadSupplies().catch(() => {});
@@ -210,15 +214,31 @@ export function useInventory(userId, userRole, ownerId) {
         return data || [];
     }
 
+    async function fetchSupplyMenus() {
+        const { data, error } = await supabase.from('supply_menu_links')
+            .select('supply_id,product_id,quantity_per_serving,quantity_tolerance,products(name)').eq('owner_id', ownerId);
+        if (error) throw error;
+        const links = (data || []).map(link => ({ ...link, product_name: link.products?.name || '' }));
+        setSupplyMenus(links);
+        return links;
+    }
+
+    async function fetchMenuProducts() {
+        const { data, error } = await supabase.from('products')
+            .select('id,name').eq('owner_id', ownerId).order('name');
+        if (error) throw error;
+        setMenuProducts(data || []);
+        return data || [];
+    }
+
     async function loadSupplies() {
         setSuppliesLoading(true);
         try {
-            const [itemsResult, logsResult] = await Promise.allSettled([fetchSupplies(), fetchSupplyLogs()]);
-            if (itemsResult.status === 'rejected' || logsResult.status === 'rejected') {
-                throw itemsResult.status === 'rejected' ? itemsResult.reason : logsResult.reason;
-            }
+            const results = await Promise.allSettled([fetchSupplies(), fetchSupplyLogs(), fetchSupplyMenus(), fetchMenuProducts()]);
+            const failed = results.find(result => result.status === 'rejected');
+            if (failed) throw failed.reason;
             setSupplyError(null);
-            return itemsResult.value;
+            return results[0].value;
         } catch (error) {
             setSupplyError('Gagal memuat data bahan atau riwayat. Coba lagi.');
             console.error('Error loading supply inventory:', error);
@@ -285,21 +305,26 @@ export function useInventory(userId, userRole, ownerId) {
         if (existing && Number(existing.stock) > 0 && existing.unit !== metadata.unit) {
             throw new Error('Kosongkan stok sebelum mengubah satuan bahan');
         }
-        let result;
-        if (input.id) {
-            const { data, error } = await supabase.from('supplies')
-                .update({ ...metadata, updated_at: new Date().toISOString() })
-                .eq('id', input.id).eq('owner_id', ownerId).select().single();
-            if (error) throw error;
-            result = data;
-        } else {
-            const initialPacks = parseSupplyQuantity(input.initial_packs === '' ? 0 : input.initial_packs ?? 0, 'Jumlah kemasan awal', { allowZero: true, whole: true });
-            const { data, error } = await supabase.rpc('create_supply', {
-                p_data: { ...metadata, initial_packs: initialPacks },
-            });
-            if (error) throw error;
-            result = Array.isArray(data) ? data[0] : data;
-        }
+        const rawMenus = input.menus ?? (input.id ? supplyMenus.filter(link => link.supply_id === input.id) : []);
+        if (!Array.isArray(rawMenus) || rawMenus.length > 100) throw new Error('Pilih maksimal 100 menu untuk satu bahan');
+        const seen = new Set();
+        const menus = rawMenus.map(menu => {
+            const productId = String(menu.product_id ?? '').trim();
+            if (!menuProducts.some(product => product.id === productId)) throw new Error('Pilih menu yang tersedia di kedai Anda');
+            if (seen.has(productId)) throw new Error('Menu yang sama cukup dihubungkan sekali');
+            seen.add(productId);
+            const dose = parseSupplyQuantity(menu.quantity_per_serving, 'Takaran per porsi menu');
+            const tolerance = parseSupplyQuantity(menu.quantity_tolerance ?? 0, 'Variasi takaran menu', { allowZero: true });
+            if (tolerance >= dose) throw new Error('Variasi takaran harus lebih kecil dari takaran per porsi');
+            return { product_id: productId, quantity_per_serving: dose, quantity_tolerance: tolerance };
+        });
+        const initialPacks = input.id ? 0 : parseSupplyQuantity(input.initial_packs === '' ? 0 : input.initial_packs ?? 0, 'Jumlah kemasan awal', { allowZero: true, whole: true });
+        const { data, error } = await supabase.rpc('save_supply_with_menus', {
+            p_data: { ...metadata, ...(input.id ? { id: input.id } : { initial_packs: initialPacks }) },
+            p_menus: menus,
+        });
+        if (error) throw error;
+        const result = Array.isArray(data) ? data[0] : data;
         if (result?.id) {
             setSupplies(previous => input.id
                 ? previous.map(item => item.id === result.id ? result : item)
@@ -343,6 +368,23 @@ export function useInventory(userId, userRole, ownerId) {
         return changeSupplyStock(id, 'consume_quantity', quantity, note);
     }
 
+    async function consumeSupplyMenu(id, productId, servings, note = '') {
+        requireSupplyAdmin();
+        if (!supplyMenus.some(link => link.supply_id === id && link.product_id === productId)) {
+            throw new Error('Pilih menu yang terhubung dengan bahan ini');
+        }
+        const quantity = parseSupplyQuantity(servings, 'Jumlah porsi menu', { whole: true });
+        const { data, error } = await supabase.rpc('consume_supply_menu', {
+            p_supply_id: id, p_product_id: productId, p_servings: quantity,
+            p_note: String(note ?? '').trim().slice(0, 500),
+        });
+        if (error) throw error;
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row?.id) setSupplies(previous => previous.map(item => item.id === row.id ? row : item));
+        await refreshSupplyAfterWrite();
+        return row;
+    }
+
     async function adjustSupply(id, quantity, note) {
         return changeSupplyStock(id, 'adjust', quantity, note);
     }
@@ -353,6 +395,8 @@ export function useInventory(userId, userRole, ownerId) {
         logs,
         supplies,
         supplyLogs,
+        supplyMenus,
+        menuProducts,
         suppliesLoading,
         supplyError,
         loading,
@@ -371,6 +415,7 @@ export function useInventory(userId, userRole, ownerId) {
         restockSupply,
         consumeSupply,
         consumeSupplyQuantity,
+        consumeSupplyMenu,
         adjustSupply,
         reload: loadWarehouses
     };

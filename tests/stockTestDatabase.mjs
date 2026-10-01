@@ -29,11 +29,22 @@ export async function createStockTestDatabase(dataDir, { existing = false } = {}
             name varchar not null, unit varchar default 'pcs', default_price numeric default 0,
             created_at timestamptz default now(), updated_at timestamptz default now()
         );
+        create table public.products (
+            id text primary key,
+            name text not null,
+            owner_id text,
+            is_active boolean default true
+        );
         grant select, insert, update, delete on public.supplies to authenticated, anon;
+        grant select, insert, update, delete on public.products to authenticated, anon;
         alter table public.supplies enable row level security;
+        alter table public.products enable row level security;
         create policy owner_rw on public.supplies for all to authenticated
+            using (owner_id = (auth.jwt()->>'owner_id')) with check (owner_id = (auth.jwt()->>'owner_id'));
+        create policy owner_rw on public.products for all to authenticated
             using (owner_id = (auth.jwt()->>'owner_id')) with check (owner_id = (auth.jwt()->>'owner_id'));
     `);
     await db.exec(await readFile(new URL('../docs/sql/inventory-supplies.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../docs/sql/inventory-supply-menus.sql', import.meta.url), 'utf8'));
     return db;
 }

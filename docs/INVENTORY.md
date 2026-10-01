@@ -11,6 +11,26 @@ leaves 300 ml, or 20 more coffees. Sugar and other supplies without a portion yi
 can be consumed by their base quantity, including decimal amounts. Unit changes
 are blocked while stock exists. Metadata edits preserve stock.
 
+Choose saved menu products when editing a supply. One syrup can link to several
+menus, each with its own base-unit dose and variation. The menu name comes from
+the existing Menu catalog, so it does not need to be entered twice. For ml items,
+the shared dose starts at 15 ml with a 3 ml variation (12-18 ml); change the
+variation to 2 ml for a 13-17 ml range, or customize either value per menu.
+**Hubungkan semua menu** adds available menus using the shared settings.
+**Terapkan ke semua menu terhubung** applies the shared dose and variation to
+all selected menus in one action. Save once to persist the item and all links
+atomically. Linking or changing doses does not change the existing stock.
+
+**Catat pakai** lets you choose a linked menu and its portion count. Menu doses
+debit the same supply balance. Usage history snapshots the menu name, dose, and
+variation, even if a menu is later renamed, unlinked, or removed. Portion counts
+shown for each menu are alternative uses of the same stock, not quantities to add.
+
+Stock deductions use the nominal saved dose. The variation range describes
+estimated usage for the current batch, not a measured remaining balance or a
+statistical confidence interval. Use **Hitung ulang** after measuring physical
+stock to reconcile it. Legacy unlinked items keep their saved yield and label.
+
 Usage is recorded manually in Inventory. POS sales do not currently consume these
 supplies; HPP recipes remain a separate cost-calculation tool. Supply balances are
 business-wide; the existing sellable-product stock remains per warehouse.
@@ -26,19 +46,24 @@ business-wide; the existing sellable-product stock remains per warehouse.
 3. Keep the existing server `SUPABASE_JWT_SECRET` configured. Stock mutations
    require the signed `owner_id`, `sub`, `user_role=admin`, and authenticated role.
    Cashiers can read inventory. Anonymous and foreign-owner changes are blocked.
-4. Deploy the app using its normal release process.
+4. Apply `docs/sql/inventory-supply-menus.sql` after the first migration. It adds
+   menu links, dose/variation snapshots, and atomic item/link saving and menu
+   consumption RPCs. It does not infer links or change existing stock or menus.
+5. Deploy the app using its normal release process.
 
-The migration was applied to the live database on October 1, 2026 as
-`20261001133634_reusable_cafe_inventory_stock`. Its rollback suite passed in both
-isolated and live PostgreSQL. Live REST checks used a separate synthetic owner
-and verified the syrup calculation, concurrent consumption, stock history, and
+The migrations were applied to the live database on October 1, 2026 as
+`20261001133634_reusable_cafe_inventory_stock` and
+`20261001150439_supply_menu_doses_and_variation`. Both rollback suites passed in
+isolated and live PostgreSQL. Live REST checks used separate synthetic owners
+and verified shared stock across two menus, custom doses and variation, concurrent
+consumption, atomic save rollback, stock history snapshots, and
 owner/cashier/anonymous permissions. The existing `adminangga` account and its
 business records matched the pre-migration checksums across 21 tables.
 
-The two stock RPCs intentionally use `SECURITY DEFINER` for atomic balance and
+The stock and menu RPCs intentionally use `SECURITY DEFINER` for atomic balance and
 ledger writes. They pin the search path, check signed admin/owner claims, reject
 foreign-owner items, and deny anonymous execution. Supabase's advisor flags this
-intentional design for review. The existing server-only `users` table remains
+intentional design for review ([advisor guidance](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)). The existing server-only `users` table remains
 protected by RLS without client policies.
 
 Stock updates lock the item row and write the balance and history in one database
@@ -66,6 +91,7 @@ live table columns, foreign keys, roles, and ownership policy.
 The browser test opens the real Inventory page with synthetic authentication and
 an HTTP adapter that executes supply queries and RPCs against isolated PostgreSQL.
 It checks creation, usage, restocking, repeated submit, errors, history, metadata,
+multiple menu links, custom doses/variation, bulk application, unlinking,
 cashier permissions, phone/tablet/laptop/desktop dialogs, and persistence after database
 reopening. It does not sign in to the production app or modify production data.
 Screenshots and isolated test databases go into ignored `.test-artifacts/`.
