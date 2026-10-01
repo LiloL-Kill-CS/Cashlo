@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+/.test-runtime/
+/.test-artifacts/
+/.npm-cache/
+/.install-incomplete/
 
 # next.js
 /.next/

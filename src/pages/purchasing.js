@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { usePurchasing } from '@/hooks/usePurchasing';
@@ -11,7 +12,6 @@ export default function PurchasingPage() {
     const {
         suppliers, purchases, supplies, loading: purLoading,
         addSupplier, updateSupplier, deleteSupplier,
-        addSupply, updateSupply, deleteSupply,
         createPurchase
     } = usePurchasing((user?.owner_id || user?.id), user?.role);
     const { warehouses } = useInventory(user?.id, user?.role);
@@ -20,18 +20,15 @@ export default function PurchasingPage() {
     const [activeTab, setActiveTab] = useState('purchases'); // purchases, suppliers, supplies
     const [showSupplierModal, setShowSupplierModal] = useState(false);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-    const [showSupplyModal, setShowSupplyModal] = useState(false);
 
     // Forms
     const [supplierForm, setSupplierForm] = useState({});
-    const [supplyForm, setSupplyForm] = useState({ name: '', unit: 'pcs', default_price: '' });
     const [purchaseInit, setPurchaseInit] = useState({
         supplier_id: '',
         warehouse_id: '',
         notes: ''
     });
     const [cart, setCart] = useState([]);
-    const [customItem, setCustomItem] = useState({ name: '', quantity: 1, cost_price: '' });
 
     useEffect(() => {
         if (!authLoading && !user) window.location.href = '/';
@@ -53,42 +50,6 @@ export default function PurchasingPage() {
         }
     };
 
-    // --- Supply (Non-Menu Items) Logic ---
-    const handleSaveSupply = async (e) => {
-        e.preventDefault();
-        try {
-            const data = {
-                name: supplyForm.name,
-                unit: supplyForm.unit || 'pcs',
-                default_price: parseFloat(parseNumberInput(supplyForm.default_price)) || 0
-            };
-            if (supplyForm.id) {
-                await updateSupply(supplyForm.id, data);
-            } else {
-                await addSupply(data);
-            }
-            setShowSupplyModal(false);
-            setSupplyForm({ name: '', unit: 'pcs', default_price: '' });
-        } catch (error) {
-            alert(error.message);
-        }
-    };
-
-    const addSupplyToCart = (supplyId) => {
-        const supply = supplies.find(s => s.id === supplyId);
-        if (!supply) return;
-
-        const existing = cart.find(c => c.product_id === supplyId);
-        if (existing) return;
-
-        setCart([...cart, {
-            product_id: supplyId,
-            name: supply.name,
-            quantity: 1,
-            cost_price: supply.default_price || 0,
-            is_supply: true
-        }]);
-    };
     // --- Purchase Logic ---
     const addToCart = (productId) => {
         const product = products.find(p => p.id === productId);
@@ -113,24 +74,6 @@ export default function PurchasingPage() {
 
     const removeCartItem = (idx) => {
         setCart(cart.filter((_, i) => i !== idx));
-    };
-
-    const addCustomItem = () => {
-        if (!customItem.name.trim()) {
-            alert('Masukkan nama item');
-            return;
-        }
-        const price = parseFloat(parseNumberInput(customItem.cost_price)) || 0;
-        const qty = parseInt(customItem.quantity) || 1;
-
-        setCart([...cart, {
-            product_id: `custom-${Date.now()}`,
-            name: customItem.name.trim(),
-            quantity: qty,
-            cost_price: price,
-            is_custom: true
-        }]);
-        setCustomItem({ name: '', quantity: 1, cost_price: '' });
     };
 
     const totalAmount = cart.reduce((sum, item) => sum + (item.quantity * item.cost_price), 0);
@@ -164,8 +107,8 @@ export default function PurchasingPage() {
             <main className="main-content">
                 <header className="page-header">
                     <div>
-                        <h1 className="page-title">Purchasing (Pembelian)</h1>
-                        <p className="text-secondary text-sm">Kelola supplier dan stok masuk</p>
+                        <h1 className="page-title">Pembelian Produk Menu</h1>
+                        <p className="text-secondary text-sm">Catat pembelian produk menu dan kelola supplier. Bahan baku dikelola di Inventory.</p>
                     </div>
                 </header>
 
@@ -174,16 +117,14 @@ export default function PurchasingPage() {
                     {/* Tabs */}
                     <div className="flex justify-between items-center mb-lg">
                         <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
-                            <button className={`btn ${activeTab === 'purchases' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('purchases')}>🛒 Pembelian</button>
+                            <button className={`btn ${activeTab === 'purchases' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('purchases')}>🛒 Pembelian Menu</button>
                             <button className={`btn ${activeTab === 'suppliers' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('suppliers')}>👥 Supplier</button>
                             <button className={`btn ${activeTab === 'supplies' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('supplies')}>📦 Bahan/Supply</button>
                         </div>
                         {activeTab === 'suppliers' && user?.role === 'admin' && (
                             <button className="btn btn-primary" onClick={() => { setSupplierForm({}); setShowSupplierModal(true); }}>+ Supplier Baru</button>
                         )}
-                        {activeTab === 'supplies' && user?.role === 'admin' && (
-                            <button className="btn btn-primary" onClick={() => { setSupplyForm({ name: '', unit: 'pcs', default_price: '' }); setShowSupplyModal(true); }}>+ Tambah Bahan</button>
-                        )}
+                        {activeTab === 'supplies' && <Link className="btn btn-primary" href="/inventory">Kelola Bahan di Inventory →</Link>}
                         {activeTab === 'purchases' && user?.role === 'admin' && (
                             <button className="btn btn-primary" onClick={() => {
                                 if (suppliers.length === 0 || warehouses.length === 0) {
@@ -191,7 +132,7 @@ export default function PurchasingPage() {
                                 } else {
                                     setShowPurchaseModal(true);
                                 }
-                            }}>+ Input Pembelian Baru</button>
+                            }}>+ Catat Pembelian Menu</button>
                         )}
                     </div>
 
@@ -277,51 +218,34 @@ export default function PurchasingPage() {
                     {/* --- SUPPLIES (Non-Menu Items) TAB --- */}
                     {activeTab === 'supplies' && (
                         <div className="card">
+                            <div className="card-header">
+                                <div>
+                                    <h3>Daftar Bahan Tersimpan</h3>
+                                    <p className="text-sm text-secondary">Tambah bahan, catat pemakaian, dan isi ulang stok di Inventory.</p>
+                                </div>
+                            </div>
                             <div className="card-body p-0">
                                 <table className="table">
                                     <thead>
                                         <tr>
                                             <th>Nama Bahan/Supply</th>
                                             <th>Satuan</th>
-                                            <th>Harga Default</th>
-                                            <th style={{ textAlign: 'right' }}>Aksi</th>
+                                            <th>Ukuran Kemasan</th>
+                                            <th>Stok Saat Ini</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {supplies.length === 0 ? (
                                             <tr><td colSpan="4" className="text-center p-lg">
-                                                Belum ada data bahan/supply. Klik "+ Tambah Bahan" untuk menambahkan.
+                                                Belum ada bahan tersimpan. Tambahkan di halaman Inventory.
                                             </td></tr>
                                         ) : (
                                             supplies.map(s => (
                                                 <tr key={s.id}>
                                                     <td style={{ fontWeight: 'bold' }}>{s.name}</td>
                                                     <td>{s.unit || 'pcs'}</td>
-                                                    <td>{formatCurrency(s.default_price || 0)}</td>
-                                                    <td style={{ textAlign: 'right' }}>
-                                                        {user?.role === 'admin' && (
-                                                            <>
-                                                                <button
-                                                                    className="btn btn-sm btn-outline"
-                                                                    onClick={() => { setSupplyForm(s); setShowSupplyModal(true); }}
-                                                                    style={{ marginRight: '4px' }}
-                                                                >
-                                                                    Edit
-                                                                </button>
-                                                                <button
-                                                                    className="btn btn-sm btn-ghost"
-                                                                    style={{ color: 'var(--color-error)' }}
-                                                                    onClick={async () => {
-                                                                        if (confirm(`Hapus "${s.name}"?`)) {
-                                                                            await deleteSupply(s.id);
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    Hapus
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </td>
+                                                    <td>{s.pack_size || 1} {s.unit || 'pcs'}</td>
+                                                    <td>{s.stock || 0} {s.unit || 'pcs'}</td>
                                                 </tr>
                                             ))
                                         )}
@@ -368,70 +292,12 @@ export default function PurchasingPage() {
                 </div>
             )}
 
-            {/* SUPPLY MODAL */}
-            {showSupplyModal && (
-                <div className="modal-overlay" onClick={() => setShowSupplyModal(false)}>
-                    <div className="modal" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>{supplyForm.id ? 'Edit Bahan/Supply' : 'Tambah Bahan/Supply Baru'}</h3>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setShowSupplyModal(false)}>✕</button>
-                        </div>
-                        <form onSubmit={handleSaveSupply}>
-                            <div className="modal-body">
-                                <div className="form-group mb-md">
-                                    <label>Nama Bahan/Supply *</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        required
-                                        placeholder="Contoh: Cup 12oz, Sirup Vanilla, Gula Pasir"
-                                        value={supplyForm.name || ''}
-                                        onChange={e => setSupplyForm({ ...supplyForm, name: e.target.value })}
-                                    />
-                                </div>
-                                <div className="form-group mb-md">
-                                    <label>Satuan</label>
-                                    <select
-                                        className="input"
-                                        value={supplyForm.unit || 'pcs'}
-                                        onChange={e => setSupplyForm({ ...supplyForm, unit: e.target.value })}
-                                    >
-                                        <option value="pcs">pcs (buah)</option>
-                                        <option value="pack">pack</option>
-                                        <option value="kg">kg</option>
-                                        <option value="gram">gram</option>
-                                        <option value="liter">liter</option>
-                                        <option value="ml">ml</option>
-                                        <option value="botol">botol</option>
-                                        <option value="dus">dus</option>
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Harga Default (Rp)</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        placeholder="0"
-                                        value={formatNumberInput(supplyForm.default_price || '')}
-                                        onChange={e => setSupplyForm({ ...supplyForm, default_price: parseNumberInput(e.target.value) })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-ghost" onClick={() => setShowSupplyModal(false)}>Batal</button>
-                                <button type="submit" className="btn btn-primary">Simpan</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
             {/* NEW PURCHASE MODAL (Large) */}
             {showPurchaseModal && (
                 <div className="modal-overlay" onClick={() => setShowPurchaseModal(false)}>
                     <div className="modal" style={{ width: '90%', maxWidth: '800px', height: '80vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Input Pembelian Baru</h3>
+                            <h3>Catat Pembelian Produk Menu</h3>
                             <button className="btn btn-ghost btn-icon" onClick={() => setShowPurchaseModal(false)}>✕</button>
                         </div>
                         <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
@@ -478,37 +344,6 @@ export default function PurchasingPage() {
                                         <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
-                            </div>
-
-                            {/* Supplies (Non-Menu Items) Selection */}
-                            <div style={{ marginBottom: '16px' }}>
-                                <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>
-                                    📦 Tambah Bahan/Supply (Non-Menu):
-                                </label>
-                                {supplies.length > 0 ? (
-                                    <select
-                                        className="input"
-                                        onChange={(e) => {
-                                            addSupplyToCart(e.target.value);
-                                            e.target.value = '';
-                                        }}
-                                    >
-                                        <option value="">-- Pilih Bahan/Supply --</option>
-                                        {supplies.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name} ({s.unit})</option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <div style={{
-                                        padding: '12px',
-                                        background: 'var(--color-bg-secondary)',
-                                        borderRadius: '8px',
-                                        fontSize: '13px',
-                                        color: 'var(--color-text-muted)'
-                                    }}>
-                                        Belum ada bahan/supply. Tambahkan dulu di tab "📦 Bahan/Supply".
-                                    </div>
-                                )}
                             </div>
 
                             {/* Items Table */}

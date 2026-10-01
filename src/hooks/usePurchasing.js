@@ -109,6 +109,23 @@ export function usePurchasing(userId, userRole) {
     }
 
     async function createPurchase(purchaseData, items) {
+        // This flow updates product_stocks and purchase_items.product_id, so
+        // non-menu supplies must be restocked through Inventory instead.
+        if (!Array.isArray(items) || items.length === 0 || items.some(item =>
+            item.is_supply || item.is_custom || !item.product_id ||
+            !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 ||
+            !Number.isFinite(Number(item.cost_price)) || Number(item.cost_price) < 0
+        )) {
+            throw new Error('Pembelian ini hanya menerima produk menu dengan jumlah dan harga yang valid. Isi ulang bahan di Inventory.');
+        }
+        const productIds = [...new Set(items.map(item => item.product_id))];
+        const { data: validProducts, error: validationError } = await supabase
+            .from('products').select('id').eq('owner_id', userId).in('id', productIds);
+        if (validationError) throw validationError;
+        if ((validProducts || []).length !== productIds.length) {
+            throw new Error('Ada item yang bukan produk menu. Isi ulang bahan di Inventory.');
+        }
+
         // 1. Create Purchase Record
         const { data: purchase, error: purchaseError } = await supabase
             .from('purchases')

@@ -1,208 +1,139 @@
-export default function Sidebar({ activePage, userRole }) {
+import { useEffect, useRef, useState } from 'react';
+import styles from './Sidebar.module.css';
+
+const icons = {
+    pos: <><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M7 14h4M3 9h18M7 21h10" /></>,
+    inventory: <><path d="M3 8l9-5 9 5v12H3z" /><path d="M3 8l9 5 9-5M12 13v7" /></>,
+    products: <><path d="M4 7h16v13H4zM2 4h20v3H2z" /><path d="M9 11h6" /></>,
+    purchasing: <><path d="M4 4h16v16H4zM8 2v4M16 2v4M4 9h16" /><path d="M8 14h8M8 17h5" /></>,
+    reports: <><path d="M4 20h16M7 17v-5M12 17V5M17 17V9" /></>,
+    dashboard: <><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="3" width="8" height="5" rx="1" /><rect x="3" y="13" width="8" height="8" rx="1" /><rect x="13" y="10" width="8" height="11" rx="1" /></>,
+    customers: <><circle cx="9" cy="8" r="3" /><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M17 14a5 5 0 0 1 4 5v1" /></>,
+    hpp: <><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M8 7h8M8 11h2M14 11h2M8 15h2M14 15h2M8 19h8" /></>,
+    hr: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    ai: <><path d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2z" /></>,
+    provitina: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
+    command: <><circle cx="12" cy="12" r="9" /><path d="M12 3v18M3 12h18" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" /></>,
+    more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+    logout: <><path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5M14 7l5 5-5 5M9 12h10" /></>,
+};
+
+const primaryItems = [
+    { id: 'pos', label: 'Kasir' },
+    { id: 'inventory', label: 'Stok' },
+    { id: 'products', label: 'Menu' },
+    { id: 'purchasing', label: 'Pembelian' },
+    { id: 'reports', label: 'Laporan' },
+    { id: 'dashboard', label: 'Ringkasan' },
+];
+
+const otherItems = [
+    { id: 'customers', label: 'Pelanggan' },
+    { id: 'hpp', label: 'Hitung HPP' },
+    { id: 'hr', label: 'Absensi' },
+    { id: 'ai', label: 'Cashlo AI' },
+    { id: 'provitina', label: 'Provitina' },
+    { id: 'command', label: 'Command Center' },
+    { id: 'settings', label: 'Pengaturan' },
+];
+
+function Icon({ name }) {
+    return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{icons[name]}</svg>;
+}
+
+function NavigationLink({ item, activePage }) {
+    const active = activePage === item.id;
     return (
-        <aside className="sidebar">
-            <div className="sidebar-logo">C</div>
+        <a href={`/${item.id}`} className={`${styles.link} ${active ? styles.active : ''}`} aria-current={active ? 'page' : undefined} title={item.label}>
+            <Icon name={item.id} />
+            <span>{item.label}</span>
+        </a>
+    );
+}
 
-            <nav className="sidebar-nav">
-                <a
-                    href="/pos"
-                    className={`sidebar-link ${activePage === 'pos' ? 'active' : ''}`}
-                    title="Kasir"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                        <line x1="8" y1="21" x2="16" y2="21"></line>
-                        <line x1="12" y1="17" x2="12" y2="21"></line>
-                    </svg>
-                </a>
+export default function Sidebar({ activePage }) {
+    const moreRef = useRef(null);
+    const primaryRef = useRef(null);
+    const [scrollEdges, setScrollEdges] = useState({ left: false, right: false });
+    const otherPageActive = otherItems.some((item) => item.id === activePage);
 
-                <a
-                    href="/dashboard"
-                    className={`sidebar-link ${activePage === 'dashboard' ? 'active' : ''}`}
-                    title="Dashboard"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                    </svg>
-                </a>
+    useEffect(() => {
+        const nav = primaryRef.current;
+        if (!nav) return;
 
-                <a
-                    href="/ai"
-                    className={`sidebar-link ${activePage === 'ai' ? 'active' : ''}`}
-                    title="Cashlo AI"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2L9 7l-5 1 3.5 3.5L7 17l5-2.5L17 17l-.5-5.5L20 8l-5-1z"></path>
-                        <circle cx="12" cy="12" r="2"></circle>
-                    </svg>
-                </a>
+        function updateScrollEdges() {
+            setScrollEdges({
+                left: nav.scrollLeft > 1,
+                right: nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1,
+            });
+        }
 
-                <a
-                    href="/reports"
-                    className={`sidebar-link ${activePage === 'reports' ? 'active' : ''}`}
-                    title="Laporan"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="18" y1="20" x2="18" y2="10"></line>
-                        <line x1="12" y1="20" x2="12" y2="4"></line>
-                        <line x1="6" y1="20" x2="6" y2="14"></line>
-                    </svg>
-                </a>
+        function revealActiveLink() {
+            const active = nav.querySelector('[aria-current="page"]');
+            if (active) {
+                const navBounds = nav.getBoundingClientRect();
+                const activeBounds = active.getBoundingClientRect();
+                if (activeBounds.left < navBounds.left + 8) {
+                    nav.scrollLeft += activeBounds.left - navBounds.left - 8;
+                } else if (activeBounds.right > navBounds.right - 8) {
+                    nav.scrollLeft += activeBounds.right - navBounds.right + 8;
+                }
+            }
+            updateScrollEdges();
+        }
 
-                <a
-                    href="/hpp"
-                    className={`sidebar-link ${activePage === 'hpp' ? 'active' : ''}`}
-                    title="HPP Calculator"
-                    style={{
-                        color: activePage === 'hpp' ? '#f59e0b' : '',
-                        background: activePage === 'hpp' ? 'linear-gradient(135deg, #f59e0b20, #ef444420)' : ''
-                    }}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="4" y="2" width="16" height="20" rx="2"></rect>
-                        <line x1="8" y1="6" x2="16" y2="6"></line>
-                        <line x1="8" y1="10" x2="10" y2="10"></line>
-                        <line x1="14" y1="10" x2="16" y2="10"></line>
-                        <line x1="8" y1="14" x2="10" y2="14"></line>
-                        <line x1="14" y1="14" x2="16" y2="14"></line>
-                        <line x1="8" y1="18" x2="10" y2="18"></line>
-                        <line x1="14" y1="18" x2="16" y2="18"></line>
-                    </svg>
-                </a>
+        const frame = window.requestAnimationFrame(revealActiveLink);
+        window.addEventListener('resize', revealActiveLink);
+        nav.addEventListener('scroll', updateScrollEdges, { passive: true });
+        return () => {
+            window.cancelAnimationFrame(frame);
+            window.removeEventListener('resize', revealActiveLink);
+            nav.removeEventListener('scroll', updateScrollEdges);
+        };
+    }, [activePage]);
 
-                <a
-                    href="/customers"
-                    className={`sidebar-link ${activePage === 'customers' ? 'active' : ''}`}
-                    title="Pelanggan"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="9" cy="7" r="4"></circle>
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                    </svg>
-                </a>
+    async function logout() {
+        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* clear local session even while offline */ }
+        localStorage.removeItem('cashlo_user');
+        localStorage.removeItem('cashlo_token');
+        window.location.href = '/';
+    }
 
-                <a
-                    href="/loyalty"
-                    className={`sidebar-link ${activePage === 'loyalty' ? 'active' : ''}`}
-                    title="Loyalty"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
-                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
-                        <path d="M4 22h16"></path>
-                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
-                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
-                        <path d="M18 2h-4c-1.1 0-2 .9-2 2v8.5c0 .28-.22.5-.5.5s-.5-.22-.5-.5V4c0-1.1-.9-2-2-2H6c-2.2 0-4 1.8-4 4v5c0 2.2 1.8 4 4 4h12c2.2 0 4-1.8 4-4V6c0-2.2-1.8-4-4-4z"></path>
-                    </svg>
-                </a>
+    function handleMoreKeyDown(event) {
+        if (event.key === 'Escape' && moreRef.current?.open) {
+            moreRef.current.open = false;
+            moreRef.current.querySelector('summary')?.focus();
+        }
+    }
 
-                <a
-                    href="/products"
-                    className={`sidebar-link ${activePage === 'products' ? 'active' : ''}`}
-                    title="Produk"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                        <line x1="3" y1="6" x2="21" y2="6"></line>
-                        <path d="M16 10a4 4 0 0 1-8 0"></path>
-                    </svg>
-                </a>
-
-                <a
-                    href="/inventory"
-                    className={`sidebar-link ${activePage === 'inventory' ? 'active' : ''}`}
-                    title="Gudang & Stok"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 9v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9"></path>
-                        <path d="M9 22V12h6v10M2 10.6L12 2l10 8.6"></path>
-                    </svg>
-                </a>
-
-                <a
-                    href="/purchasing"
-                    className={`sidebar-link ${activePage === 'purchasing' ? 'active' : ''}`}
-                    title="Purchasing (Supplier)"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                        <path d="M16 10a4 4 0 0 1-8 0"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                </a>
-
-                <a
-                    href="/hr"
-                    className={`sidebar-link ${activePage === 'hr' ? 'active' : ''}`}
-                    title="HR & Absensi"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                </a>
-
-                <a
-                    href="/settings"
-                    className={`sidebar-link ${activePage === 'settings' ? 'active' : ''}`}
-                    title="Pengaturan"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                    </svg>
-                </a>
-                <a
-                    href="/provitina"
-                    className={`sidebar-link ${activePage === 'provitina' ? 'active' : ''}`}
-                    title="Provitina Intelligence"
-                    style={{ color: activePage === 'provitina' ? '#0EA5E9' : '' }}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                </a>
-
-                <a
-                    href="/command"
-                    className={`sidebar-link ${activePage === 'command' ? 'active' : ''}`}
-                    title="Command Center (Palantir-style)"
-                    style={{
-                        color: activePage === 'command' ? '#8b5cf6' : '',
-                        background: activePage === 'command' ? 'linear-gradient(135deg, #3b82f620, #8b5cf620)' : ''
-                    }}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9"></path>
-                        <path d="M12 7v10"></path>
-                    </svg>
-                </a>
-
+    return (
+        <aside className={`sidebar ${styles.shell}`}>
+            <div className={styles.brand} aria-label="Cashlo">
+                <span className={styles.brandMark}>C</span>
+                <span><strong>Cashlo</strong><small>Operasional toko</small></span>
+            </div>
+            <nav className={styles.nav} aria-label="Navigasi utama">
+                <div ref={primaryRef} className={styles.primaryLinks}>
+                    {primaryItems.map((item) => <NavigationLink key={item.id} item={item} activePage={activePage} />)}
+                </div>
+                {scrollEdges.left && <span className={`${styles.scrollCue} ${styles.scrollCueLeft}`} aria-hidden="true">‹</span>}
+                {scrollEdges.right && <span className={`${styles.scrollCue} ${styles.scrollCueRight}`} aria-hidden="true">›</span>}
+                <details ref={moreRef} className={styles.more} onKeyDown={handleMoreKeyDown}>
+                    <summary className={`${styles.link} ${otherPageActive ? styles.active : ''}`}>
+                        <Icon name="more" />
+                        <span>Lainnya</span>
+                    </summary>
+                    <div className={styles.morePanel}>
+                        <span className={styles.sectionLabel}>Lainnya</span>
+                        {otherItems.map((item) => <NavigationLink key={item.id} item={item} activePage={activePage} />)}
+                        <button type="button" className={`${styles.link} ${styles.logout}`} onClick={logout}>
+                            <Icon name="logout" />
+                            <span>Keluar</span>
+                        </button>
+                    </div>
+                </details>
             </nav>
-
-            <a
-                href="/"
-                className="sidebar-link"
-                title="Logout"
-                onClick={async (e) => {
-                    e.preventDefault();
-                    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* ignore */ }
-                    localStorage.removeItem('cashlo_user');
-                    localStorage.removeItem('cashlo_token');
-                    window.location.href = '/';
-                }}
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                    <polyline points="16 17 21 12 16 7"></polyline>
-                    <line x1="21" y1="12" x2="9" y2="12"></line>
-                </svg>
-            </a>
-        </aside >
+        </aside>
     );
 }

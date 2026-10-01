@@ -1,392 +1,152 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useInventory } from '@/hooks/useInventory';
-import { useProducts } from '@/hooks/useProducts';
-import { formatDate, formatNumberInput, parseNumberInput } from '@/lib/db';
+import { formatDate } from '@/lib/db';
+import { remainingSupplyServings, quantityPerServing, roundSupplyQuantity } from '@/lib/inventoryQuantities';
+import styles from '@/styles/Inventory.module.css';
+
+const number = value => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 6 }).format(Number(value) || 0);
+const unitLabel = unit => unit === 'gram' ? 'g' : unit;
+const blankItem = { name: '', unit: 'ml', pack_size: '750', servings_per_pack: '', usage_label: 'kopi', initial_packs: '1', min_stock_level: '0' };
+
+function InventoryDialog({ title, onClose, busy, children }) {
+    const container = useRef(null);
+    useEffect(() => {
+        const previous = document.activeElement;
+        container.current?.querySelector('input, select, textarea, button')?.focus();
+        return () => previous?.focus();
+    }, []);
+    return <div className={styles.overlay} onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+        <section ref={container} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="inventory-dialog-title" onKeyDown={event => {
+            if (event.key === 'Escape' && !busy) onClose();
+            if (event.key !== 'Tab') return;
+            const elements = [...container.current.querySelectorAll('button, input, select, textarea, a[href]')].filter(element => !element.disabled);
+            const first = elements[0], last = elements.at(-1);
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }}>
+            <div className={styles.dialogHeader}><h2 id="inventory-dialog-title">{title}</h2><button type="button" aria-label="Tutup" onClick={onClose} disabled={busy} className={styles.iconButton}>×</button></div>
+            {children}
+        </section>
+    </div>;
+}
 
 export default function InventoryPage() {
     const { user, loading: authLoading } = useAuth();
-    const {
-        warehouses, stocks, logs, loading: invLoading,
-        selectedWarehouseId, setSelectedWarehouseId,
-        addWarehouse, updateWarehouse, updateStock, deleteStock, deleteWarehouse, loadStocks
-    } = useInventory(user?.id, user?.role);
-
-    const { deleteProduct, reload: reloadProducts } = useProducts((user?.owner_id || user?.id), user?.role);
-
-    const [activeTab, setActiveTab] = useState('stock'); // stock, logs, warehouses
-    const [searchTerm, setSearchTerm] = useState('');
-
-    // Modal States
-    const [adjustmentModal, setAdjustmentModal] = useState(false);
-    const [warehouseModal, setWarehouseModal] = useState(false);
-    const [selectedItem, setSelectedItem] = useState(null);
-    const [editingWarehouse, setEditingWarehouse] = useState(null);
-    const [formData, setFormData] = useState({});
-
-    useEffect(() => {
-        if (!authLoading && !user) window.location.href = '/';
-    }, [user, authLoading]);
-
-    // --- Search Logic ---
-    const filteredStocks = stocks.filter(s =>
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.category && s.category.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-
-    // --- Stock Adjustment ---
-    const openAdjustmentModal = (item) => {
-        setSelectedItem(item);
-        setFormData({
-            quantity: item.quantity,
-            type: 'adjustment', // adjustment, opname, purchase
-            notes: ''
-        });
-        setAdjustmentModal(true);
+    const ownerId = user?.owner_id || user?.id;
+    const inventory = useInventory(authLoading ? null : ownerId, user?.role, authLoading ? null : ownerId);
+    const { warehouses, stocks, logs, supplies, supplyLogs, loading, suppliesLoading, supplyError, selectedWarehouseId, setSelectedWarehouseId,
+        saveSupply, restockSupply, consumeSupply, consumeSupplyQuantity, adjustSupply, updateStock, addWarehouse, updateWarehouse } = inventory;
+    const [tab, setTab] = useState('supplies');
+    const [search, setSearch] = useState('');
+    const [filter, setFilter] = useState('all');
+    const [modal, setModal] = useState(null);
+    const [form, setForm] = useState({});
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+    const [notice, setNotice] = useState('');
+    const submitLock = useRef(false);
+    const admin = user?.role === 'admin';
+    useEffect(() => { if (!authLoading && !user) window.location.href = '/'; }, [user, authLoading]);
+    const items = supplies || [];
+    const low = item => Number(item.stock) <= Number(item.min_stock_level || 0);
+    const matches = item => item.name?.toLowerCase().includes(search.toLowerCase().trim());
+    const filtered = items.filter(item => matches(item) && (filter === 'all' || (filter === 'low' ? low(item) : Number(item.stock) > 0)));
+    const open = (mode, item = null) => {
+        setError(''); setNotice(''); setModal({ mode, item });
+        if (mode === 'item') setForm(item ? { ...item, servings_per_pack: item.servings_per_pack || '', usage_label: item.usage_label || '' } : { ...blankItem });
+        else if (mode === 'warehouse') setForm(item ? { name: item.name, address: item.address || '' } : { name: '', address: '' });
+        else setForm({ amount: mode === 'adjust' ? item.stock : mode === 'product' ? item.quantity : '1', notes: '' });
     };
-
-    const handleAdjustmentSubmit = async (e) => {
-        e.preventDefault();
+    const close = () => { if (!submitLock.current) { setModal(null); setError(''); } };
+    const change = event => setForm({ ...form, [event.target.name]: event.target.value });
+    const submit = async event => {
+        event.preventDefault();
+        if (submitLock.current) return;
+        submitLock.current = true; setBusy(true); setError('');
         try {
-            await updateStock(
-                selectedItem.id,
-                selectedWarehouseId,
-                parseFloat(formData.quantity),
-                formData.type,
-                formData.notes,
-                user?.id
-            );
-            setAdjustmentModal(false);
-        } catch (error) {
-            alert('Error: ' + error.message);
-        }
-    };
-
-    // --- Warehouse Management ---
-    const handleAddWarehouse = async (e) => {
-        e.preventDefault();
-        try {
-            await addWarehouse(formData);
-            setWarehouseModal(false);
-        } catch (error) {
-            alert(error.message);
-        }
-    };
-
-    // --- Edit Warehouse ---
-    const openEditWarehouse = (warehouse) => {
-        setEditingWarehouse(warehouse);
-        setFormData({ name: warehouse.name, address: warehouse.address || '' });
-        setWarehouseModal(true);
-    };
-
-    const handleWarehouseSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            if (editingWarehouse) {
-                await updateWarehouse(editingWarehouse.id, formData);
-            } else {
-                await addWarehouse(formData);
+            const item = modal.item;
+            if (modal.mode === 'item') await saveSupply({ ...form, id: item?.id, name: form.name.trim(), servings_per_pack: form.servings_per_pack === '' ? null : Number(form.servings_per_pack) });
+            else if (modal.mode === 'restock') await restockSupply(item.id, Number(form.amount), form.notes);
+            else if (modal.mode === 'consume') {
+                if (item.servings_per_pack) await consumeSupply(item.id, Number(form.amount), form.notes);
+                else await consumeSupplyQuantity(item.id, Number(form.amount), form.notes);
+            } else if (modal.mode === 'adjust') await adjustSupply(item.id, Number(form.amount), form.notes);
+            else if (modal.mode === 'product') await updateStock(item.id, selectedWarehouseId, Number(form.amount), 'opname', form.notes);
+            else if (modal.mode === 'warehouse') {
+                if (item) await updateWarehouse(item.id, form); else await addWarehouse(form);
             }
-            setWarehouseModal(false);
-            setEditingWarehouse(null);
-        } catch (error) {
-            alert(error.message);
-        }
+            setNotice(modal.mode === 'item' ? 'Item tersimpan. Gunakan item ini lagi saat stok habis.' : 'Perubahan berhasil disimpan.');
+            setModal(null);
+        } catch (err) { setError(err.message || 'Gagal menyimpan. Silakan coba lagi.'); }
+        finally { submitLock.current = false; setBusy(false); }
     };
+    const selected = modal?.item;
+    const amount = Number(form.amount);
+    const perServing = selected?.servings_per_pack ? quantityPerServing(selected.pack_size, selected.servings_per_pack) : 0;
+    const delta = modal?.mode === 'restock' ? amount * Number(selected?.pack_size) : modal?.mode === 'consume' ? selected.servings_per_pack ? Math.round(amount * Number(selected.pack_size) / selected.servings_per_pack * 1e6) / 1e6 : amount : 0;
+    const preview = roundSupplyQuantity(modal?.mode === 'adjust' ? amount : Number(selected?.stock) + (modal?.mode === 'restock' ? delta : -delta));
+    const invalidUsage = modal?.mode === 'consume' && (!Number.isFinite(preview) || preview < 0);
+    const titles = { item: selected ? 'Edit item tersimpan' : 'Tambah item inventory', restock: 'Isi ulang stok', consume: 'Catat pemakaian', adjust: 'Hitung ulang stok', product: 'Hitung ulang stok menu', warehouse: selected ? 'Edit lokasi' : 'Tambah lokasi' };
+    if (!authLoading && !user) return null;
 
-    // --- Delete Product Entirely ---
-    const handleDeleteProduct = async (item) => {
-        if (confirm(`Hapus produk "${item.name}" SEPENUHNYA dari database?\n\nProduk akan dihapus dari semua gudang dan tidak bisa dikembalikan.`)) {
-            try {
-                // First delete stock records
-                await deleteStock(item.id, selectedWarehouseId);
-                // Then delete product itself
-                await deleteProduct(item.id);
-                // Reload products data to update useProducts hook
-                await reloadProducts();
-                // Refresh the stocks list to update UI
-                await loadStocks(selectedWarehouseId);
-                alert('Produk berhasil dihapus!');
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-    };
-
-    const currentWarehouse = warehouses.find(w => w.id === selectedWarehouseId);
-
-    if (authLoading || invLoading) return <div className="p-xl text-center">Memuat Inventory...</div>;
-
-    return (
-        <div className="app-container">
-            <Sidebar activePage="inventory" userRole={user?.role} />
-            <main className="main-content">
-                <header className="page-header">
-                    <div>
-                        <h1 className="page-title">Gudang & Stok</h1>
-                        <p className="text-secondary text-sm">Kelola stok di berbagai gudang/cabang</p>
-                    </div>
-                </header>
-
-                <div style={{ padding: 'var(--spacing-xl)' }}>
-
-                    {/* Warehouse Selector & Tabs */}
-                    <div className="flex justify-between items-center mb-lg">
-                        <div className="flex gap-md items-center">
-                            <span className="text-secondary">Lokasi:</span>
-                            <select
-                                className="input"
-                                style={{ minWidth: '200px' }}
-                                value={selectedWarehouseId || ''}
-                                onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                            >
-                                {warehouses.map(w => (
-                                    <option key={w.id} value={w.id}>{w.name} {w.is_primary ? '(Utama)' : ''}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex gap-sm">
-                            <button className={`btn ${activeTab === 'stock' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('stock')}>📦 Stok</button>
-                            <button className={`btn ${activeTab === 'logs' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('logs')}>📝 Riwayat</button>
-                            <button className={`btn ${activeTab === 'warehouses' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('warehouses')}>🏭 Gudang</button>
-                        </div>
-                    </div>
-
-                    {/* --- STOCK TAB --- */}
-                    {activeTab === 'stock' && (
-                        <div className="card">
-                            <div className="card-header flex justify-between">
-                                <input
-                                    type="text"
-                                    className="input"
-                                    placeholder="Cari produk..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    style={{ width: '300px' }}
-                                />
-                                <button className="btn btn-secondary" onClick={() => window.print()}>🖨️ Cetak Laporan</button>
-                            </div>
-                            <div className="card-body p-0">
-                                <table className="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Produk</th>
-                                            <th>Kategori</th>
-                                            <th>Stok Saat Ini</th>
-                                            <th style={{ textAlign: 'right' }}>Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredStocks.map(item => (
-                                            <tr key={item.id}>
-                                                <td style={{ fontWeight: '500' }}>{item.name}</td>
-                                                <td>{item.category?.replace('cat-', '')}</td>
-                                                <td>
-                                                    <span className={`badge ${item.quantity <= item.min_stock_level ? 'badge-error' : 'badge-success'}`}>
-                                                        {item.quantity}
-                                                    </span>
-                                                </td>
-                                                <td style={{ textAlign: 'right' }}>
-                                                    {user?.role === 'admin' && (
-                                                        <>
-                                                            <button className="btn btn-sm btn-outline" onClick={() => openAdjustmentModal(item)}>
-                                                                Sesuaikan
-                                                            </button>
-                                                            <button className="btn btn-sm btn-ghost text-error" onClick={() => handleDeleteProduct(item)}>
-                                                                🗑️
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- LOGS TAB --- */}
-                    {activeTab === 'logs' && (
-                        <div className="card">
-                            <div className="card-header">
-                                <h3>Riwayat Perubahan Stok (50 Terakhir)</h3>
-                            </div>
-                            <div className="card-body p-0">
-                                <table className="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Waktu</th>
-                                            <th>Produk</th>
-                                            <th>Tipe</th>
-                                            <th>Perubahan</th>
-                                            <th>Akhir</th>
-                                            <th>User</th>
-                                            <th>Catatan</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {logs.map(log => (
-                                            <tr key={log.id}>
-                                                <td className="text-sm text-secondary">{formatDate(log.created_at)}</td>
-                                                <td style={{ fontWeight: '500' }}>{log.products?.name}</td>
-                                                <td>
-                                                    <span className="badge">{log.type}</span>
-                                                </td>
-                                                <td style={{ color: log.change_amount > 0 ? 'var(--color-success)' : 'var(--color-error)' }}>
-                                                    {log.change_amount > 0 ? '+' : ''}{log.change_amount}
-                                                </td>
-                                                <td>{log.final_stock}</td>
-                                                <td className="text-sm">{log.users?.name || '-'}</td>
-                                                <td className="text-sm text-secondary">{log.notes}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- WAREHOUSES TAB --- */}
-                    {activeTab === 'warehouses' && (
-                        <div className="card">
-                            <div className="card-header flex justify-between">
-                                <h3>Daftar Gudang / Cabang</h3>
-                                {user?.role === 'admin' && (
-                                    <button className="btn btn-primary btn-sm" onClick={() => { setFormData({ name: '', address: '' }); setWarehouseModal(true); }}>+ Gudang Baru</button>
-                                )}
-                            </div>
-                            <div className="card-body p-0">
-                                <table className="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Nama Gudang</th>
-                                            <th>Alamat</th>
-                                            <th>Status</th>
-                                            <th style={{ textAlign: 'right' }}>Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {warehouses.map(w => (
-                                            <tr key={w.id}>
-                                                <td style={{ fontWeight: 'bold' }}>{w.name}</td>
-                                                <td>{w.address || '-'}</td>
-                                                <td>{w.is_primary ? <span className="badge badge-primary">Utama</span> : 'Cabang'}</td>
-                                                <td style={{ textAlign: 'right' }}>
-                                                    {user?.role === 'admin' && (
-                                                        <>
-                                                            <button className="btn btn-sm btn-ghost" onClick={() => openEditWarehouse(w)}>✏️</button>
-                                                            {!w.is_primary && (
-                                                                <button className="btn btn-sm btn-ghost text-error" onClick={() => { if (confirm('Hapus gudang ini?')) deleteWarehouse(w.id) }}>🗑️</button>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                </div>
-            </main>
-
-            {/* ADJUSTMENT MODAL */}
-            {adjustmentModal && selectedItem && (
-                <div className="modal-overlay" onClick={() => setAdjustmentModal(false)}>
-                    <div className="modal" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Sesuaikan Stok: {selectedItem.name}</h3>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setAdjustmentModal(false)}>✕</button>
-                        </div>
-                        <form onSubmit={handleAdjustmentSubmit}>
-                            <div className="modal-body">
-                                <div className="form-group mb-md">
-                                    <label>Jumlah Stok Baru (Real)</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        required
-                                        value={formatNumberInput(formData.quantity)}
-                                        onChange={e => setFormData({ ...formData, quantity: parseNumberInput(e.target.value) })}
-                                    />
-                                    <p className="text-xs text-secondary mt-xs">Stok tercatat saat ini: {selectedItem.quantity}</p>
-                                </div>
-                                <div className="form-group mb-md">
-                                    <label>Tipe Penyesuaian</label>
-                                    <select
-                                        className="input"
-                                        value={formData.type}
-                                        onChange={e => setFormData({ ...formData, type: e.target.value })}
-                                    >
-                                        <option value="adjustment">Koreksi Manual (Adjustment)</option>
-                                        <option value="opname">Stock Opname (Hitung Ulang)</option>
-                                        <option value="purchase">Pembelian Barang (Masuk)</option>
-                                        <option value="transfer_in">Transfer Masuk</option>
-                                        <option value="damaged">Barang Rusak (Keluar)</option>
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Catatan (Opsional)</label>
-                                    <textarea
-                                        className="input"
-                                        rows="2"
-                                        value={formData.notes}
-                                        onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                                    ></textarea>
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button type="submit" className="btn btn-primary">Simpan Perubahan</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* WAREHOUSE MODAL */}
-            {warehouseModal && (
-                <div className="modal-overlay" onClick={() => { setWarehouseModal(false); setEditingWarehouse(null); }}>
-                    <div className="modal" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>{editingWarehouse ? 'Edit Gudang' : 'Tambah Gudang Baru'}</h3>
-                            <button className="btn btn-ghost btn-icon" onClick={() => { setWarehouseModal(false); setEditingWarehouse(null); }}>✕</button>
-                        </div>
-                        <form onSubmit={handleWarehouseSubmit}>
-                            <div className="modal-body">
-                                <div className="form-group mb-md">
-                                    <label>Nama Gudang</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        required
-                                        value={formData.name || ''}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>Alamat (Opsional)</label>
-                                    <textarea
-                                        className="input"
-                                        value={formData.address || ''}
-                                        onChange={e => setFormData({ ...formData, address: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button type="submit" className="btn btn-primary">Simpan</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+    return <div className="app-container">
+        <Sidebar activePage="inventory" userRole={user?.role} />
+        <main className={`main-content ${styles.main}`}>
+            <header className={styles.header}><div><div className={styles.eyebrow}>OPERASIONAL KEDAI</div><h1>Inventory</h1><p>Beli sekali, simpan itemnya. Pantau sisa bahan setiap hari.</p></div>{admin && <button className={styles.primary} onClick={() => open('item')}>+ Tambah item</button>}</header>
+            <div className={styles.body}>
+                {notice && <div role="status" className={styles.success}>{notice}</div>}
+                {supplyError && <div role="alert" className={styles.error}>{supplyError}<button className={styles.secondary} onClick={() => inventory.loadSupplies().catch(() => {})}>Coba lagi</button></div>}
+                <section className={styles.stats} aria-label="Ringkasan inventory">
+                    <div><span>Item tersimpan</span><strong>{items.length}</strong><small>Siap dipakai kembali</small></div>
+                    <div><span>Perlu isi ulang</span><strong className={items.some(low) ? styles.warningText : ''}>{items.filter(low).length}</strong><small>Mencapai batas minimum</small></div>
+                    <div><span>Takaran tersimpan</span><strong>{items.filter(item => item.servings_per_pack).length}</strong><small>Pemakaian per porsi otomatis dihitung</small></div>
+                </section>
+                <nav className={styles.tabs} aria-label="Bagian inventory">{[['supplies', 'Bahan & perlengkapan'], ['history', 'Riwayat bahan'], ['products', 'Stok menu'], ['locations', 'Lokasi']].map(([value, label]) => <button key={value} aria-current={tab === value ? 'page' : undefined} className={tab === value ? styles.tabActive : ''} onClick={() => { setTab(value); setSearch(''); }}>{label}</button>)}</nav>
+                {(authLoading || ((['supplies', 'history'].includes(tab) ? suppliesLoading : loading) && !modal)) ? <div className={styles.empty} role="status">Memuat inventory…</div> : <>
+                    {tab === 'supplies' && <>
+                        <div className={styles.toolbar}><label className={styles.search}><span aria-hidden="true">⌕</span><input aria-label="Cari bahan atau perlengkapan" placeholder="Cari syrup, gula, cup…" value={search} onChange={event => setSearch(event.target.value)} /></label><div className={styles.filters} aria-label="Filter stok">{[['all', 'Semua'], ['low', 'Perlu isi ulang'], ['available', 'Tersedia']].map(([value, label]) => <button key={value} className={filter === value ? styles.filterActive : ''} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div></div>
+                        {items.length === 0 && !supplyError && <section className={styles.onboarding}><div><div className={styles.eyebrow}>MULAI DARI BAHAN PERTAMA</div><h2>Sisa syrup, tanpa menebak.</h2><p>Simpan ukuran kemasan dan jumlah porsi. Saat membuat kopi, cukup catat jumlahnya. Saat membeli lagi, cukup isi ulang.</p>{admin && <button className={styles.primary} onClick={() => open('item')}>+ Tambah bahan pertama</button>}</div><div className={styles.example}><span>CONTOH TAKARAN</span><strong>750 ml ÷ 50 kopi</strong><p>15 ml untuk setiap kopi</p><div>30 kopi dibuat <b>→ 300 ml tersisa</b></div><small>Contoh perhitungan, bukan stok kedai Anda.</small></div></section>}
+                        {items.length > 0 && filtered.length === 0 && <div className={styles.empty}>Tidak ada item yang cocok. Coba ubah pencarian atau filter.</div>}
+                        <section className={styles.grid} aria-label="Daftar bahan dan perlengkapan">{filtered.map(item => {
+                            const quantity = Number(item.stock) || 0, pack = Number(item.pack_size) || 1;
+                            const portions = item.servings_per_pack ? remainingSupplyServings(item) : null;
+                            return <article key={item.id} className={styles.item} aria-label={item.name}>
+                                <div className={styles.itemTop}><span className={styles.itemIcon} aria-hidden="true">{['ml', 'l'].includes(item.unit) ? '◒' : item.unit === 'pcs' ? '▤' : '◈'}</span><span className={low(item) ? styles.lowBadge : styles.goodBadge}>{quantity === 0 ? 'Habis' : low(item) ? 'Stok menipis' : 'Tersedia'}</span></div>
+                                <h2>{item.name}</h2><p className={styles.pack}>{number(pack)} {unitLabel(item.unit)} / kemasan{item.servings_per_pack ? ` · ${number(item.servings_per_pack)} ${item.usage_label || 'porsi'}` : ''}</p>
+                                <div className={styles.quantity}><strong>{number(quantity)}</strong><span>{unitLabel(item.unit)} tersisa</span></div>
+                                <div className={styles.meter} role="meter" aria-label={`Sisa ${item.name} dibanding satu kemasan`} aria-valuemin={0} aria-valuemax={pack} aria-valuenow={Math.min(quantity, pack)} aria-valuetext={`${number(quantity)} ${unitLabel(item.unit)} tersisa`}><span className={low(item) ? styles.meterLow : ''} style={{ width: `${Math.min(100, quantity / pack * 100)}%` }} /></div>
+                                <div className={styles.capacity}>{portions !== null ? <><b>≈ {number(portions)} {item.usage_label || 'porsi'}</b><span>{number(quantityPerServing(item.pack_size, item.servings_per_pack))} {unitLabel(item.unit)} / porsi</span></> : <><b>{number(quantity / pack)} kemasan</b><span>Catat pemakaian dalam {unitLabel(item.unit)}</span></>}</div>
+                                {admin && <><div className={styles.itemActions}><button className={styles.secondary} onClick={() => open('restock', item)}>+ Isi ulang</button><button className={styles.primary} disabled={quantity === 0} onClick={() => open('consume', item)}>Catat pakai</button></div><div className={styles.itemFooter}><button onClick={() => open('item', item)}>Edit item</button><button onClick={() => open('adjust', item)}>Hitung ulang</button></div></>}
+                            </article>;
+                        })}</section>
+                        {items.length > 0 && <p className={styles.footnote}>Takaran mengikuti porsi yang Anda simpan. Catat pemakaian di sini; penjualan kasir belum mengurangi bahan secara otomatis.</p>}
+                    </>}
+                    {tab === 'history' && <section className={styles.panel}><div className={styles.panelHeader}><div><h2>Riwayat bahan</h2><p>50 perubahan terakhir · isi ulang, pemakaian, dan hitung ulang</p></div></div><div className={styles.tableWrap}><table><thead><tr><th>Waktu</th><th>Item</th><th>Aktivitas</th><th>Perubahan</th><th>Sisa</th><th>Catatan</th></tr></thead><tbody>{(supplyLogs || []).map(log => <tr key={log.id}><td>{formatDate(log.created_at)}</td><td>{log.supply_name}</td><td>{{ restock: 'Isi ulang', consume: 'Pemakaian', consume_quantity: 'Pemakaian', adjust: 'Hitung ulang', initial: 'Stok awal' }[log.action] || log.action}</td><td className={log.change_amount > 0 ? styles.positive : ''}>{log.change_amount > 0 ? '+' : ''}{number(log.change_amount)} {unitLabel(log.unit)}</td><td>{number(log.stock_after)} {unitLabel(log.unit)}</td><td>{log.note || '—'}</td></tr>)}</tbody></table></div>{!(supplyLogs || []).length && <div className={styles.empty}>Belum ada perubahan bahan. Riwayat akan muncul setelah item ditambahkan atau stok dicatat.</div>}</section>}
+                    {tab === 'products' && <section className={styles.panel}><div className={styles.panelHeader}><div><h2>Stok menu</h2><p>Stok produk jual per lokasi. Bahan kedai ada di tab Bahan & perlengkapan.</p></div><label>Lokasi<select className="input" value={selectedWarehouseId || ''} onChange={event => setSelectedWarehouseId(event.target.value)}>{warehouses.map(warehouse => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select></label></div><div className={styles.tableWrap}><table><thead><tr><th>Menu</th><th>Stok</th><th>Aksi</th></tr></thead><tbody>{stocks.map(item => <tr key={item.id}><td>{item.name}</td><td>{number(item.quantity)}</td><td>{admin && <button className={styles.secondary} onClick={() => open('product', item)}>Hitung ulang</button>}</td></tr>)}</tbody></table></div>{!stocks.length && <div className={styles.empty}>Belum ada stok menu di lokasi ini.</div>}<details className={styles.productHistory}><summary>Riwayat stok menu</summary><div className={styles.tableWrap}><table><thead><tr><th>Waktu</th><th>Menu</th><th>Perubahan</th><th>Sisa</th></tr></thead><tbody>{logs.map(log => <tr key={log.id}><td>{formatDate(log.created_at)}</td><td>{log.products?.name || '—'}</td><td>{number(log.change_amount)}</td><td>{number(log.final_stock)}</td></tr>)}</tbody></table></div></details></section>}
+                    {tab === 'locations' && <section className={styles.panel}><div className={styles.panelHeader}><div><h2>Lokasi stok menu</h2><p>Bahan & perlengkapan dicatat untuk seluruh kedai.</p></div>{admin && <button className={styles.secondary} onClick={() => open('warehouse')}>+ Tambah lokasi</button>}</div>{warehouses.map(warehouse => <div className={styles.location} key={warehouse.id}><div><h3>{warehouse.name} {warehouse.is_primary && <span className={styles.goodBadge}>Utama</span>}</h3><p>{warehouse.address || 'Alamat belum ditambahkan'}</p></div>{admin && <button className={styles.secondary} onClick={() => open('warehouse', warehouse)}>Edit lokasi</button>}</div>)}</section>}
+                </>}
+            </div>
+        </main>
+        {modal && <InventoryDialog title={titles[modal.mode]} onClose={close} busy={busy}><form onSubmit={submit}><div className={styles.formBody}>
+            {modal.mode === 'item' ? <>
+                <label>Nama item<input className="input" name="name" placeholder="Contoh: Syrup vanilla" maxLength={120} required value={form.name} onChange={change} /></label>
+                <div className={styles.formGrid}><label>Satuan<select className="input" name="unit" value={form.unit} disabled={!!selected && Number(selected.stock) > 0} onChange={change}>{[...new Set(['ml', 'g', 'pcs', ...(selected?.unit ? [selected.unit] : [])])].map(unit => <option key={unit} value={unit}>{unitLabel(unit)}</option>)}</select></label><label>Isi satu kemasan<input className="input" type="number" name="pack_size" min="0.000001" step="any" required value={form.pack_size} onChange={change} /></label></div>
+                <div className={styles.formGrid}><label>Porsi per kemasan <span>(opsional)</span><input className="input" type="number" name="servings_per_pack" placeholder="Contoh: 50" min="1" step="1" value={form.servings_per_pack} onChange={change} /></label><label>Nama porsi<input className="input" name="usage_label" maxLength={40} placeholder="kopi, minuman, porsi…" value={form.usage_label} onChange={change} /></label></div>
+                {Number(form.servings_per_pack) > 0 && Number(form.pack_size) > 0 && <div className={styles.preview}><span>Takaran tersimpan</span><strong>{number(Number(form.pack_size) / Number(form.servings_per_pack))} {unitLabel(form.unit)} / {form.usage_label || 'porsi'}</strong></div>}
+                <div className={styles.formGrid}>{!selected && <label>Jumlah kemasan awal<input className="input" type="number" name="initial_packs" min="0" step="1" required value={form.initial_packs} onChange={change} /><small>Total: {number(Number(form.initial_packs) * Number(form.pack_size))} {unitLabel(form.unit)}</small></label>}<label>Ingatkan saat sisa ({unitLabel(form.unit)})<input className="input" type="number" name="min_stock_level" min="0" step="any" required value={form.min_stock_level} onChange={change} /></label></div>
+                <p className={styles.help}>{selected ? 'Mengubah detail tidak mengubah sisa stok. Satuan dikunci selama stok masih ada.' : 'Item dan takaran disimpan untuk pembelian berikutnya. Bisa mulai dari stok nol.'}</p>
+            </> : modal.mode === 'warehouse' ? <><label>Nama lokasi<input className="input" name="name" required value={form.name} onChange={change} /></label><label>Alamat <span>(opsional)</span><textarea className="input" name="address" value={form.address} onChange={change} /></label></> : <>
+                <div className={styles.selectedItem}><h3>{selected.name}</h3><p>{modal.mode === 'product' ? `Stok saat ini: ${number(selected.quantity)}` : `${number(selected.stock)} ${unitLabel(selected.unit)} tersisa${selected.servings_per_pack ? ` · ${number(perServing)} ${unitLabel(selected.unit)} / ${selected.usage_label || 'porsi'}` : ''}`}</p></div>
+                <label>{modal.mode === 'restock' ? 'Tambah berapa kemasan?' : modal.mode === 'consume' ? selected.servings_per_pack ? `Jumlah ${selected.usage_label || 'porsi'} yang dibuat` : `Jumlah terpakai (${unitLabel(selected.unit)})` : `Jumlah stok sebenarnya${modal.mode === 'adjust' ? ` (${unitLabel(selected.unit)})` : ''}`}<input className="input" type="number" name="amount" required min={['restock', 'consume'].includes(modal.mode) ? (modal.mode === 'restock' || selected.servings_per_pack ? 1 : 0.000001) : 0} step={modal.mode === 'restock' || (modal.mode === 'consume' && selected.servings_per_pack) ? 1 : 'any'} value={form.amount} onChange={change} /></label>
+                {modal.mode !== 'product' && <div className={styles.preview}><span>{modal.mode === 'restock' ? `+${number(delta)} ${unitLabel(selected.unit)} masuk` : modal.mode === 'consume' ? `${number(delta)} ${unitLabel(selected.unit)} terpakai` : 'Sisa setelah koreksi'}</span><strong>{number(Math.max(0, preview))} {unitLabel(selected.unit)} tersisa</strong>{invalidUsage && <p className={styles.warningText}>Stok tidak cukup. Kurangi jumlah pemakaian.</p>}</div>}
+                <label>Catatan <span>(opsional)</span><textarea className="input" name="notes" rows={2} maxLength={500} placeholder="Contoh: shift pagi" value={form.notes} onChange={change} /></label>
+                {modal.mode === 'consume' && <p className={styles.help}>Catat pemakaian yang belum dicatat sebelumnya untuk menghindari pengurangan dua kali.</p>}
+            </>}
+            {error && <div className={styles.error} role="alert">{error}</div>}
+        </div><div className={styles.formFooter}><button type="button" className={styles.secondary} disabled={busy} onClick={close}>Batal</button><button type="submit" className={styles.primary} disabled={busy || invalidUsage}>{busy ? 'Menyimpan…' : modal.mode === 'restock' ? 'Simpan isi ulang' : modal.mode === 'consume' ? 'Simpan pemakaian' : 'Simpan'}</button></div></form></InventoryDialog>}
+    </div>;
 }
 
-
-export const getServerSideProps = async () => { return { props: {} }; };
+export const getServerSideProps = async () => ({ props: {} });

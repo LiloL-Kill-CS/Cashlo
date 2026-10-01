@@ -1,0 +1,201 @@
+.shell:global(.sidebar) {
+  width: 224px;
+  align-items: stretch;
+  padding: 20px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #7e6850 #14110f;
+  background: #14110f;
+  border-color: #302820;
+}
+
+.shell:global(.sidebar)::-webkit-scrollbar { display: block; width: 7px; }
+.shell:global(.sidebar)::-webkit-scrollbar-thumb { background: #7e6850; border-radius: 7px; }
+
+.shell + :global(.main-content) { margin-left: 224px; }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 8px 22px;
+  color: #fff;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 12px;
+  background: #c98a4b;
+  color: #17100a;
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.brand strong, .brand small { display: block; }
+.brand strong { font-size: 17px; line-height: 1.2; }
+.brand small { color: #bba995; font-size: 11px; margin-top: 2px; }
+
+.nav, .primaryLinks, .morePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav { min-height: 0; position: relative; }
+
+.scrollCue { display: none; }
+
+.link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #d4c7b9;
+  font: 600 13px/1.3 var(--font-family);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.link svg { width: 20px; height: 20px; flex: none; }
+
+.link:hover, .link:focus-visible { color: #fff; background: #302820; }
+.link:focus-visible { outline: 2px solid #eeb477; outline-offset: 2px; }
+.active, .active:hover { color: #ffca90; background: #3b291b; }
+
+.more {
+  margin-top: 12px;
+  border-top: 1px solid #40352b;
+  padding-top: 10px;
+}
+
+.more summary { list-style: none; }
+.more summary::-webkit-details-marker { display: none; }
+.more summary::after {
+  content: '⌄';
+  margin-left: auto;
+  color: #c6ac8e;
+  font-size: 19px;
+  line-height: 1;
+}
+.more[open] summary::after { transform: rotate(180deg); }
+.morePanel { padding-top: 8px; }
+.more:not([open]) .morePanel { display: none; }
+
+.sectionLabel {
+  padding: 4px 12px;
+  color: #bba995;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.logout { margin-top: 4px; }
+
+@media (max-width: 768px), (min-width: 769px) and (max-height: 700px) {
+  .shell:global(.sidebar) {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: calc(70px + env(safe-area-inset-bottom));
+    flex-direction: row;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    overflow: visible;
+    border-right: 0;
+    border-top: 1px solid #40352b;
+    z-index: 100;
+  }
+
+  .shell + :global(.main-content) {
+    margin-left: 0;
+    margin-bottom: 0;
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+
+  .brand, .sectionLabel { display: none; }
+  .nav { flex-direction: row; align-items: stretch; width: 100%; gap: 4px; }
+
+  .primaryLinks {
+    flex: 1;
+    min-width: 0;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .primaryLinks::-webkit-scrollbar { display: none; }
+
+  .scrollCue {
+    position: absolute;
+    top: 0;
+    display: grid;
+    place-items: center;
+    width: 17px;
+    height: 56px;
+    z-index: 1;
+    pointer-events: none;
+    color: #f2c491;
+    font-size: 24px;
+    line-height: 1;
+  }
+  .scrollCueLeft { left: 0; background: linear-gradient(to right, #14110f 45%, transparent); }
+  .scrollCueRight { right: 60px; background: linear-gradient(to left, #14110f 45%, transparent); }
+
+  .link {
+    flex: none;
+    width: auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-width: 56px;
+    min-height: 56px;
+    padding: 4px 5px;
+    font-size: 10px;
+    text-align: center;
+    scroll-snap-align: start;
+  }
+  .link svg { width: 20px; height: 20px; }
+
+  .more { flex: none; margin: 0; padding: 0; border: 0; }
+  .more summary::after { display: none; }
+
+  .morePanel {
+    position: fixed;
+    right: 8px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: min(68vh, 480px);
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid #55402f;
+    border-radius: 16px;
+    background: #1b1612;
+    box-shadow: 0 16px 44px #000b;
+  }
+  .morePanel .link {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 8px;
+    font-size: 12px;
+    text-align: left;
+  }
+  .logout { margin-top: 0; }
+}
