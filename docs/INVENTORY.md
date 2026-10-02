@@ -21,7 +21,8 @@ variation to 2 ml for a 13-17 ml range, or customize either value per menu.
 all selected menus in one action. Save once to persist the item and all links
 atomically. Linking or changing doses does not change the existing stock.
 
-**Catat pakai** lets you choose a linked menu and its portion count. Menu doses
+**Catat pakai** records usage outside POS sales, such as samples or waste. It lets
+you choose a linked menu and its portion count. Menu doses
 debit the same supply balance. Usage history snapshots the menu name, dose, and
 variation, even if a menu is later renamed, unlinked, or removed. Portion counts
 shown for each menu are alternative uses of the same stock, not quantities to add.
@@ -31,9 +32,24 @@ estimated usage for the current batch, not a measured remaining balance or a
 statistical confidence interval. Use **Hitung ulang** after measuring physical
 stock to reconcile it. Legacy unlinked items keep their saved yield and label.
 
-Usage is recorded manually in Inventory. POS sales do not currently consume these
-supplies; HPP recipes remain a separate cost-calculation tool. Supply balances are
-business-wide; the existing sellable-product stock remains per warehouse.
+Completed POS payments automatically consume every supply linked to the sold
+menus, using saved nominal dose times quantity. A menu can consume several
+supplies, and several menus can consume one shared supply. Modifier cart rows for
+the same menu are combined. The payment, supply balances, and usage history commit
+in one database transaction; insufficient stock rejects the entire save and keeps
+the cart with an actionable error. Cashiers can consume ingredients through a
+completed sale but cannot edit supply settings or manually adjust balances.
+
+Repeated payment confirmation is blocked. An unchanged checkout retains its
+receipt ID across retries; a lost response recovers the saved receipt without
+deducting ingredients twice. History includes the receipt ID and menu/dose
+snapshots. Inventory reloads when its tab becomes visible again.
+
+Do not manually record an already-paid POS sale in **Catat pakai**. Old receipts
+and manual historic entries are not retroactively consumed. Voiding or deleting a
+receipt does not put used ingredients back; reconcile measured stock with
+**Hitung ulang** when needed. HPP recipes remain a separate cost-calculation tool.
+Supply balances are business-wide; sellable-product stock remains per warehouse.
 
 ## Release setup
 
@@ -49,7 +65,12 @@ business-wide; the existing sellable-product stock remains per warehouse.
 4. Apply `docs/sql/inventory-supply-menus.sql` after the first migration. It adds
    menu links, dose/variation snapshots, and atomic item/link saving and menu
    consumption RPCs. It does not infer links or change existing stock or menus.
-5. Deploy the app using its normal release process.
+5. Apply `docs/sql/inventory-pos-consumption.sql` before deploying the payment
+   update. New checkout rows carry `inventory_source=pos`; the insert trigger
+   consumes ingredients only for completed POS payments. Existing receipts and
+   stock are left intact. Its internal trigger function cannot be called through
+   the public RPC API.
+6. Deploy the app using its normal release process.
 
 The migrations were applied to the live database on October 1, 2026 as
 `20261001133634_reusable_cafe_inventory_stock` and
@@ -59,6 +80,14 @@ and verified shared stock across two menus, custom doses and variation, concurre
 consumption, atomic save rollback, stock history snapshots, and
 owner/cashier/anonymous permissions. The existing `adminangga` account and its
 business records matched the pre-migration checksums across 21 tables.
+
+The payment fix uses migration
+`20261002140101_pos_payments_consume_linked_supplies`. Its rollback suite passed
+in isolated and live PostgreSQL, including inactive cashier, owner isolation,
+duplicate receipt IDs, multi-ingredient shortage rollback, and receipt deletion.
+Live REST payments verified 750 ml becomes 735 ml for one 15 ml menu and concurrent
+payments cannot overdraw ingredients. A fresh protected snapshot also covers
+the saved supply, its menu links, and ingredient history across 23 tables.
 
 The stock and menu RPCs intentionally use `SECURITY DEFINER` for atomic balance and
 ledger writes. They pin the search path, check signed admin/owner claims, reject
@@ -81,6 +110,7 @@ npx playwright install chromium
 npm run dev -- --webpack -p 3100
 # In another terminal:
 npm run test:inventory-ui
+npm run test:pos-inventory-ui
 npm run build -- --webpack
 ```
 
@@ -95,6 +125,11 @@ multiple menu links, custom doses/variation, bulk application, unlinking,
 cashier permissions, phone/tablet/laptop/desktop dialogs, and persistence after database
 reopening. It does not sign in to the production app or modify production data.
 Screenshots and isolated test databases go into ignored `.test-artifacts/`.
+
+The POS browser test runs completed payments against the same isolated database,
+then opens Inventory to check the resulting balance and history. It covers mixed
+menus, cashier sales, cancellation, simultaneous clicks, committed responses lost
+in transit, retries after payment details change, and stock-shortage errors.
 
 Optional environment variables: `INVENTORY_TEST_URL` overrides localhost:3100;
 `PLAYWRIGHT_CHANNEL=chrome` uses installed Chrome; `PLAYWRIGHT_MODULE` points to

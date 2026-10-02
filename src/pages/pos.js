@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { formatCurrency } from '@/lib/db';
+import { useState, useEffect, useRef } from 'react';
+import { formatCurrency, generateTransactionId } from '@/lib/db';
 import Sidebar from '@/components/layout/Sidebar';
 import ProductGrid from '@/components/pos/ProductGrid';
 import Cart from '@/components/pos/Cart';
@@ -15,6 +15,7 @@ import { useDynamicPricing } from '@/hooks/useDynamicPricing';
 import { useAuth } from '@/hooks/useAuth';
 import { useRecommendations } from '@/hooks/useRecommendations';
 import { useCustomers } from '@/hooks/useCustomers';
+import styles from '@/styles/POS.module.css';
 
 export default function POSPage() {
     const { user, loading: authLoading } = useAuth();
@@ -39,6 +40,10 @@ export default function POSPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [customerQuery, setCustomerQuery] = useState('');
     const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentBusy, setPaymentBusy] = useState(false);
+    const [paymentError, setPaymentError] = useState('');
+    const paymentLockRef = useRef(false);
+    const checkoutRef = useRef(null);
     const [showModifierModal, setShowModifierModal] = useState(false);
     const [showHoldModal, setShowHoldModal] = useState(false);
     const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -66,6 +71,12 @@ export default function POSPage() {
         }
     }, [items.length]);
 
+    useEffect(() => {
+        if (checkoutRef.current && checkoutRef.current.cartSignature !== JSON.stringify(items)) {
+            checkoutRef.current = null;
+        }
+    }, [items]);
+
     // Redirect if not logged in
     useEffect(() => {
         if (!authLoading && !user) {
@@ -85,6 +96,7 @@ export default function POSPage() {
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === 'Escape') {
+                if (paymentLockRef.current) return;
                 setShowPaymentModal(false);
                 setShowModifierModal(false);
                 setShowHoldModal(false);
@@ -184,6 +196,19 @@ export default function POSPage() {
     };
 
     const handlePaymentConfirm = async ({ paymentMethod, cashReceived, pointsRedeemed }) => {
+        if (paymentLockRef.current || items.length === 0) return;
+        paymentLockRef.current = true;
+        setPaymentBusy(true);
+        setPaymentError('');
+        const cartSignature = JSON.stringify(items);
+        // A lost response may have committed the sale; keep its ID for the same cart
+        // even when the cashier changes payment details before retrying.
+        if (checkoutRef.current?.cartSignature !== cartSignature) {
+            checkoutRef.current = {
+                cartSignature,
+                id: `${generateTransactionId()}-${crypto.randomUUID()}`,
+            };
+        }
         try {
             const transaction = await createTransaction(
                 items,
@@ -191,8 +216,10 @@ export default function POSPage() {
                 parseFloat(cashReceived),
                 selectedCustomer?.id,
                 pointsRedeemed,
-                activePromo
+                activePromo,
+                checkoutRef.current.id
             );
+            checkoutRef.current = null;
             setLastTransaction(transaction);
             clearCart();
             setSelectedCustomer(null);
@@ -200,15 +227,24 @@ export default function POSPage() {
             setShowReceiptModal(true);
         } catch (error) {
             console.error('Error creating transaction:', error);
-            alert('Gagal menyimpan transaksi');
+            setPaymentError(error?.message || 'Gagal menyimpan transaksi. Periksa koneksi dan coba lagi.');
+        } finally {
+            paymentLockRef.current = false;
+            setPaymentBusy(false);
         }
+    };
+
+    const cancelPayment = () => {
+        if (paymentLockRef.current) return;
+        setPaymentError('');
+        setShowPaymentModal(false);
     };
 
     if (authLoading || productsLoading) {
         return (
             <div className="app-container">
                 <Sidebar activePage="pos" userRole={user?.role} />
-                <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <main className={`main-content ${styles.main}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div className="animate-pulse text-muted">Memuat...</div>
                 </main>
             </div>
@@ -219,7 +255,7 @@ export default function POSPage() {
         <div className="app-container">
             <Sidebar activePage="pos" userRole={user?.role} />
 
-            <main className="main-content">
+            <main className={`main-content ${styles.main}`}>
                 <header className="page-header">
                     <div>
                         <h1 className="page-title">Kasir</h1>
@@ -227,7 +263,7 @@ export default function POSPage() {
                     </div>
                 </header>
 
-                <div className="pos-container">
+                <div className={`pos-container ${styles.container}`}>
 
                     {/* 💡 Intelligent Recommendations */}
                     {recommendations.length > 0 && (
@@ -322,8 +358,10 @@ export default function POSPage() {
                     total={finalTotal}
                     customer={selectedCustomer}
                     onConfirm={handlePaymentConfirm}
-                    onCancel={() => setShowPaymentModal(false)}
-                    onSelectCustomer={() => setShowCustomerModal(true)}
+                    onCancel={cancelPayment}
+                    onSelectCustomer={() => { if (!paymentLockRef.current) setShowCustomerModal(true); }}
+                    busy={paymentBusy}
+                    error={paymentError}
                 />
             )}
 

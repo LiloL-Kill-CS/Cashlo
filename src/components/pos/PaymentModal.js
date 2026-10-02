@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { formatCurrency, formatNumberInput, parseNumberInput } from '@/lib/db';
 import { useLoyalty } from '@/hooks/useLoyalty';
 
@@ -7,7 +7,9 @@ export default function PaymentModal({
     customer,
     onConfirm,
     onCancel,
-    onSelectCustomer
+    onSelectCustomer,
+    busy = false,
+    error = ''
 }) {
     const { rewards } = useLoyalty();
     const [cashReceived, setCashReceived] = useState('');
@@ -52,9 +54,9 @@ export default function PaymentModal({
         500000
     ].filter((v, i, a) => a.indexOf(v) === i && v >= finalTotal).slice(0, 6);
 
-    const handleConfirm = () => {
-        if (canPay) {
-            onConfirm({
+    const handleConfirm = async () => {
+        if (canPay && !busy) {
+            await onConfirm({
                 paymentMethod,
                 cashReceived: paymentMethod === 'cash' ? cash : finalTotal,
                 change: paymentMethod === 'cash' ? change : 0,
@@ -65,11 +67,11 @@ export default function PaymentModal({
     };
 
     return (
-        <div className="modal-overlay" onClick={onCancel}>
-            <div className="modal" style={{ width: '100%', maxWidth: '480px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => { if (!busy) onCancel(); }}>
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="payment-dialog-title" aria-busy={busy} style={{ width: '100%', maxWidth: '480px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h3 className="modal-title">Pembayaran</h3>
-                    <button className="btn btn-ghost btn-icon" onClick={onCancel}>✕</button>
+                    <h3 className="modal-title" id="payment-dialog-title">Pembayaran</h3>
+                    <button className="btn btn-ghost btn-icon" onClick={onCancel} disabled={busy} aria-label="Tutup pembayaran">✕</button>
                 </div>
 
                 <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
@@ -89,6 +91,7 @@ export default function PaymentModal({
                                         <button
                                             className={`btn btn-sm ${selectedReward === null ? 'btn-primary' : 'btn-outline'}`}
                                             onClick={() => setSelectedReward(null)}
+                                            disabled={busy}
                                         >
                                             Tidak
                                         </button>
@@ -97,6 +100,7 @@ export default function PaymentModal({
                                                 key={r.id}
                                                 className={`btn btn-sm ${selectedReward?.id === r.id ? 'btn-primary' : 'btn-outline'}`}
                                                 onClick={() => setSelectedReward(selectedReward?.id === r.id ? null : r)}
+                                                disabled={busy}
                                             >
                                                 {r.name} (-{r.points_cost} pts)
                                             </button>
@@ -113,6 +117,7 @@ export default function PaymentModal({
                                 className="btn btn-outline w-full"
                                 style={{ borderStyle: 'dashed', borderColor: 'var(--color-warning)', color: 'var(--color-warning)' }}
                                 onClick={onSelectCustomer}
+                                disabled={busy}
                             >
                                 ⚠️ Pilih Pelanggan (Member) - Opsional
                             </button>
@@ -133,7 +138,8 @@ export default function PaymentModal({
                         <div style={{
                             fontSize: '36px',
                             fontWeight: '800',
-                            letterSpacing: '-0.02em'
+                            letterSpacing: '-0.02em',
+                            overflowWrap: 'anywhere'
                         }}>
                             {formatCurrency(finalTotal)}
                         </div>
@@ -153,6 +159,7 @@ export default function PaymentModal({
                             <button
                                 className={`btn ${paymentMethod === 'cash' ? 'btn-primary' : 'btn-secondary'}`}
                                 onClick={() => setPaymentMethod('cash')}
+                                disabled={busy}
                                 style={{ flex: 1 }}
                             >
                                 💵 Tunai
@@ -160,6 +167,7 @@ export default function PaymentModal({
                             <button
                                 className={`btn ${paymentMethod === 'qr' ? 'btn-primary' : 'btn-secondary'}`}
                                 onClick={() => setPaymentMethod('qr')}
+                                disabled={busy}
                                 style={{ flex: 1 }}
                             >
                                 📱 QRIS
@@ -180,6 +188,7 @@ export default function PaymentModal({
                                     className="input input-lg"
                                     value={displayCash}
                                     onChange={handleCashInput}
+                                    disabled={busy}
                                     placeholder="Masukkan nominal..."
                                     autoFocus
                                     style={{
@@ -202,6 +211,8 @@ export default function PaymentModal({
                                         key={amount}
                                         className="btn btn-secondary"
                                         onClick={() => handleQuickAmount(amount)}
+                                        disabled={busy}
+                                        style={{ minWidth: 0, overflowWrap: 'anywhere' }}
                                     >
                                         {formatCurrency(amount)}
                                     </button>
@@ -255,17 +266,23 @@ export default function PaymentModal({
                     )}
                 </div>
 
-                <div className="modal-footer">
-                    <button className="btn btn-ghost" onClick={onCancel}>
+                {error && (
+                    <div role="alert" style={{ margin: '0 var(--spacing-md)', padding: 'var(--spacing-sm)', color: 'var(--color-error)', background: 'var(--color-error-bg)', borderRadius: 'var(--radius-md)', overflowWrap: 'anywhere' }}>
+                        {error}
+                    </div>
+                )}
+
+                <div className="modal-footer" style={{ flexWrap: 'wrap' }}>
+                    <button className="btn btn-ghost" onClick={onCancel} disabled={busy} style={{ flex: '1 1 100px' }}>
                         Batal
                     </button>
                     <button
                         className="btn btn-success btn-lg"
                         onClick={handleConfirm}
-                        disabled={!canPay}
-                        style={{ minWidth: '200px' }}
+                        disabled={!canPay || busy}
+                        style={{ minWidth: 0, flex: '2 1 180px', whiteSpace: 'normal' }}
                     >
-                        ✓ Konfirmasi Pembayaran
+                        {busy ? 'Menyimpan pembayaran…' : '✓ Konfirmasi Pembayaran'}
                     </button>
                 </div>
             </div>

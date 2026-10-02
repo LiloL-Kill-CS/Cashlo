@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test tests/*.test.mjs",
-    "test:inventory-ui": "node tests/inventoryBrowser.mjs"
+    "test:inventory-ui": "node tests/inventoryBrowser.mjs",
+    "test:pos-inventory-ui": "node tests/posInventoryBrowser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

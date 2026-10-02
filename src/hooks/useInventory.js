@@ -35,6 +35,19 @@ export function useInventory(userId, userRole, ownerId) {
         }
     }, [ownerId]);
 
+    useEffect(() => {
+        if (!ownerId) return;
+        const refresh = () => {
+            if (document.visibilityState === 'visible') loadSupplies().catch(() => {});
+        };
+        window.addEventListener('focus', refresh);
+        document.addEventListener('visibilitychange', refresh);
+        return () => {
+            window.removeEventListener('focus', refresh);
+            document.removeEventListener('visibilitychange', refresh);
+        };
+    }, [ownerId]);
+
     // Load stocks when warehouse changes
     useEffect(() => {
         if (selectedWarehouseId) {

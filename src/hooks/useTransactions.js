@@ -17,11 +17,7 @@ export function useTransactions(userId, userRole, actualUserId) {
 
     async function loadTransactions() {
         try {
-            // We want to fetch transactions belonging to the business owner
-            // This means any transaction where the user_id's owner_id is the current userId
-            // Wait, the easiest way is to add business_id or owner_id to transactions.
-            // Since we haven't, we need to query transactions where user_id IN (admin, kasir1, kasir2)
-            // Let's first get all user IDs that belong to this owner
+            // Include the owner's employees when loading business receipts.
             let userIds = [userId];
             try {
                 const res = await fetch('/api/users', { credentials: 'same-origin' });
@@ -52,8 +48,8 @@ export function useTransactions(userId, userRole, actualUserId) {
         }
     }
 
-    async function createTransaction(cartItems, paymentMethod = 'cash', cashReceived = 0, customerId = null, pointsRedeemed = 0, discount = null) {
-        const id = generateTransactionId();
+    async function createTransaction(cartItems, paymentMethod = 'cash', cashReceived = 0, customerId = null, pointsRedeemed = 0, discount = null, checkoutId = null) {
+        const id = checkoutId || `${generateTransactionId()}-${crypto.randomUUID()}`;
         const now = new Date().toISOString();
 
         const items = cartItems.map(item => ({
@@ -84,6 +80,7 @@ export function useTransactions(userId, userRole, actualUserId) {
             id,
             datetime: now,
             user_id: currentUserId, // Log the actual user who made the transaction
+            owner_id: userId,
             customer_id: customerId,
             items: JSON.stringify(items),
             subtotal: finalSubtotal,
@@ -93,22 +90,31 @@ export function useTransactions(userId, userRole, actualUserId) {
             cash_received: cashReceived,
             change: cashReceived - finalSubtotal,
             status: 'completed',
+            inventory_source: 'pos',
             created_at: now
         };
 
         const { error } = await supabase.from('transactions').insert([transaction]);
         if (error) {
+            // A response can be lost after the payment and its supply deductions
+            // commit. Recover the same receipt instead of creating another sale.
+            const { data: existing } = await supabase.from('transactions').select('*')
+                .eq('id', id).eq('owner_id', userId).eq('user_id', currentUserId).maybeSingle();
+            if (existing && existing.status === 'completed' && existing.inventory_source === 'pos'
+                && existing.items === transaction.items) {
+                await loadTransactions();
+                return existing;
+            }
             console.error('Error creating transaction:', error);
             throw error;
         }
 
-        // --- INVENTORY UPDATE LOGIC ---
+        // Linked supply balances and their ledger are already committed by the
+        // database with the completed payment. Keep sellable-product stock here.
         try {
             // Get Primary Warehouse for this user (or any primary)
-            let warehouseQuery = supabase.from('warehouses').select('id').eq('is_primary', true).limit(1);
-            if (userRole !== 'admin') {
-                warehouseQuery = warehouseQuery.eq('owner_id', userId);
-            }
+            const warehouseQuery = supabase.from('warehouses').select('id')
+                .eq('is_primary', true).eq('owner_id', userId).limit(1);
             const { data: warehouses } = await warehouseQuery;
             const warehouseId = warehouses?.[0]?.id;
 

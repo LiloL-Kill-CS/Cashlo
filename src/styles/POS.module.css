@@ -1,0 +1,59 @@
+.main {
+  min-width: 0;
+}
+
+.container,
+.container :global(.product-section),
+.container :global(.category-tabs) {
+  min-width: 0;
+}
+
+.container :global(.cart-section) {
+  min-width: 0;
+}
+
+.container :global(.cart-header) {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.container :global(.cart-header > div) {
+  min-width: 0;
+  width: 100%;
+}
+
+.container :global(.cart-header .btn) {
+  min-width: 0;
+  white-space: normal;
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .container:global(.pos-container) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  }
+}
+
+@media (max-width: 768px) {
+  .main,
+  .container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .container :global(.product-section) {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .container :global(.product-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .container :global(.product-btn),
+  .container :global(.product-btn .name),
+  .container :global(.product-btn .price) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

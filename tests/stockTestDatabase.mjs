@@ -33,18 +33,42 @@ export async function createStockTestDatabase(dataDir, { existing = false } = {}
             id text primary key,
             name text not null,
             owner_id text,
+            category text, sell_price numeric default 0, cost_price numeric default 0,
+            modifiers text,
             is_active boolean default true
         );
+        create table public.transactions (
+            id text primary key, datetime timestamptz default now(), user_id text,
+            customer_id text, items text, subtotal numeric default 0,
+            total_cost numeric default 0, total_profit numeric default 0,
+            cash_received numeric default 0, change numeric default 0,
+            status text default 'completed', created_at timestamptz default now(),
+            payment_method text default 'cash', manual_txn_count integer default 1,
+            owner_id text
+        );
+        create function public.set_owner_id_from_jwt() returns trigger
+            language plpgsql set search_path = '' as $$
+        begin
+            if new.owner_id is null then new.owner_id := auth.jwt()->>'owner_id'; end if;
+            return new;
+        end; $$;
+        create trigger set_owner before insert on public.transactions
+            for each row execute function public.set_owner_id_from_jwt();
         grant select, insert, update, delete on public.supplies to authenticated, anon;
         grant select, insert, update, delete on public.products to authenticated, anon;
+        grant select, insert, update, delete on public.transactions to authenticated, anon;
         alter table public.supplies enable row level security;
         alter table public.products enable row level security;
+        alter table public.transactions enable row level security;
         create policy owner_rw on public.supplies for all to authenticated
             using (owner_id = (auth.jwt()->>'owner_id')) with check (owner_id = (auth.jwt()->>'owner_id'));
         create policy owner_rw on public.products for all to authenticated
             using (owner_id = (auth.jwt()->>'owner_id')) with check (owner_id = (auth.jwt()->>'owner_id'));
+        create policy owner_rw on public.transactions for all to authenticated
+            using (owner_id = (auth.jwt()->>'owner_id')) with check (owner_id = (auth.jwt()->>'owner_id'));
     `);
     await db.exec(await readFile(new URL('../docs/sql/inventory-supplies.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../docs/sql/inventory-supply-menus.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../docs/sql/inventory-pos-consumption.sql', import.meta.url), 'utf8'));
     return db;
 }
