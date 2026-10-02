@@ -254,14 +254,18 @@ begin
   end if;
 
   update public.transactions set status = 'voided' where id = txn_one;
-  if (select stock from public.supplies where id = current_setting('test.pos_syrup')) <> before_syrup then
-    raise exception 'Voiding a receipt unexpectedly restored ingredients';
+  if (select stock from public.supplies where id = current_setting('test.pos_syrup')) <> before_syrup + 15
+      or (select stock from public.supplies where id = current_setting('test.pos_sugar')) <> before_sugar + 5 then
+    raise exception 'Voiding a receipt did not restore its original ingredient amounts';
   end if;
   delete from public.transactions where id = txn_one;
   if (select count(*) from public.supply_stock_logs
-      where transaction_id = txn_one and product_name = 'Test latte') <> 2
-      or (select stock from public.supplies where id = current_setting('test.pos_syrup')) <> before_syrup then
-    raise exception 'Receipt deletion removed ingredient history or changed stock';
+      where transaction_id = txn_one and product_name = 'Test latte' and action = 'consume') <> 2
+      or (select count(*) from public.supply_stock_logs
+      where transaction_id = txn_one and product_name = 'Test latte' and action = 'reversal') <> 2
+      or (select stock from public.supplies where id = current_setting('test.pos_syrup')) <> before_syrup + 15
+      or (select stock from public.supplies where id = current_setting('test.pos_sugar')) <> before_sugar + 5 then
+    raise exception 'Receipt deletion removed ingredient history or restored stock twice';
   end if;
 end;
 $sales$;

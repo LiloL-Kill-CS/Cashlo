@@ -214,38 +214,39 @@ export function useTransactions(userId, userRole, actualUserId) {
     }
 
     async function voidTransaction(transactionId) {
-        const { error } = await supabase.from('transactions').update({ status: 'voided' }).eq('id', transactionId);
-        if (error) console.error('Error voiding transaction:', error);
+        if (!confirm('Batalkan transaksi ini? Pendapatan akan dikeluarkan dari laporan. Bahan yang terpotong saat pembayaran otomatis dikembalikan satu kali.')) return false;
+        let query = supabase.from('transactions').update({ status: 'voided' }).eq('id', transactionId);
+        const receipt = transactions.find(transaction => transaction.id === transactionId);
+        query = receipt?.owner_id == null && receipt?.user_id
+            ? query.is('owner_id', null).eq('user_id', receipt.user_id)
+            : query.eq('owner_id', userId);
+        const { data, error } = await query.select('id');
+        if (error) throw error;
+        if (!data?.length) throw new Error('Transaksi tidak ditemukan atau Anda tidak memiliki izin. Muat ulang laporan.');
         await loadTransactions();
+        return true;
     }
 
     async function deleteTransaction(transactionId) {
-        if (!confirm('Apakah Anda yakin ingin menghapus transaksi ini secara permanen? Data tidak dapat dikembalikan.')) {
+        if (!confirm('Hapus transaksi ini secara permanen? Bahan yang terpotong saat pembayaran otomatis dikembalikan satu kali. Transaksi yang sudah dibatalkan tidak menambah stok lagi. Data transaksi tidak dapat dikembalikan.')) {
             return false;
         }
 
-        try {
-            const { error } = await supabase
-                .from('transactions')
-                .delete()
-                .eq('id', transactionId);
-
-            if (error) {
-                console.error('Error deleting transaction:', error);
-                throw error;
-            }
-
-            await loadTransactions();
-            return true;
-        } catch (error) {
-            console.error('Failed to delete transaction:', error);
-            return false;
-        }
+        let query = supabase.from('transactions').delete().eq('id', transactionId);
+        const receipt = transactions.find(transaction => transaction.id === transactionId);
+        query = receipt?.owner_id == null && receipt?.user_id
+            ? query.is('owner_id', null).eq('user_id', receipt.user_id)
+            : query.eq('owner_id', userId);
+        const { data, error } = await query.select('id');
+        if (error) throw error;
+        if (!data?.length) throw new Error('Transaksi tidak ditemukan atau Anda tidak memiliki izin. Muat ulang laporan.');
+        await loadTransactions();
+        return true;
     }
 
     function getTransactionsByDateRange(startDate, endDate) {
         return transactions.filter(txn => {
-            if (txn.status === 'voided') return false;
+            if (['voided', 'canceled', 'cancelled'].includes(txn.status)) return false;
             const txnDate = new Date(txn.datetime);
             return txnDate >= startDate && txnDate <= endDate;
         });

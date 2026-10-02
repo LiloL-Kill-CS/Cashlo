@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "node --test tests/*.test.mjs",
     "test:inventory-ui": "node tests/inventoryBrowser.mjs",
-    "test:pos-inventory-ui": "node tests/posInventoryBrowser.mjs"
+    "test:pos-inventory-ui": "node tests/posInventoryBrowser.mjs",
+    "test:transaction-reversal-ui": "node tests/transactionReversalBrowser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

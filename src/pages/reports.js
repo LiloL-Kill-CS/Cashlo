@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useTransactions';
@@ -7,9 +7,11 @@ import { useExpenses } from '@/hooks/useExpenses';
 import { usePurchasing } from '@/hooks/usePurchasing';
 import { formatCurrency, formatDate, formatNumberInput, parseNumberInput } from '@/lib/db';
 
+const isCanceledTransaction = status => ['voided', 'canceled', 'cancelled'].includes(status);
+
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction, deleteTransaction } = useTransactions((user?.owner_id || user?.id), user?.role, user?.id);
+    const { transactions, loading: txnLoading, getTransactionsByDateRange, createManualTransaction, voidTransaction, deleteTransaction } = useTransactions((user?.owner_id || user?.id), user?.role, user?.id);
     const { products } = useProducts((user?.owner_id || user?.id), user?.role);
     const { getExpensesByDateRange, addExpense, deleteExpense } = useExpenses((user?.owner_id || user?.id));
     const { supplies } = usePurchasing((user?.owner_id || user?.id), user?.role);
@@ -29,14 +31,16 @@ export default function ReportsPage() {
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [paymentFilter, setPaymentFilter] = useState('all');
     const [filteredTxns, setFilteredTxns] = useState([]);
+    const [canceledTxns, setCanceledTxns] = useState([]);
+    const [transactionAction, setTransactionAction] = useState(null);
+    const [transactionFeedback, setTransactionFeedback] = useState(null);
+    const transactionActionLock = useRef(false);
     const [expenses, setExpenses] = useState([]);
     const [stats, setStats] = useState({ revenue: 0, grossProfit: 0, cost: 0, count: 0, expenses: 0, netProfit: 0 });
     const [showManualModal, setShowManualModal] = useState(false);
     const [showExpenseModal, setShowExpenseModal] = useState(false);
     const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
     const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [] });
-
-    // Removed redirect as Cashiers can now access reports but see limited data
 
     // Calculate totals from cart items
     const manualCartTotals = manualData.cartItems.reduce((acc, item) => ({
@@ -141,15 +145,22 @@ export default function ReportsPage() {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        let filtered = getTransactionsByDateRange(start, end);
+        let filtered = getTransactionsByDateRange(start, end)
+            .filter(txn => !isCanceledTransaction(txn.status));
         
         if (paymentFilter !== 'all') {
             filtered = filtered.filter(txn => txn.payment_method === paymentFilter);
         }
 
+        // Keep canceled receipts visible for audit without counting them as sales.
+        const canceled = transactions.filter(txn => isCanceledTransaction(txn.status)
+            && new Date(txn.datetime) >= start && new Date(txn.datetime) <= end
+            && (paymentFilter === 'all' || txn.payment_method === paymentFilter));
+
         const expenseData = await getExpensesByDateRange(start, end);
 
         setFilteredTxns(filtered);
+        setCanceledTxns(canceled);
         setExpenses(expenseData);
 
         const revenue = filtered.reduce((sum, t) => sum + t.subtotal, 0);
@@ -241,6 +252,35 @@ export default function ReportsPage() {
         }
     };
 
+    const handleTransactionAction = async (txn, action) => {
+        if (transactionActionLock.current) return;
+        transactionActionLock.current = true;
+        setTransactionAction(`${action}:${txn.id}`);
+        setTransactionFeedback(null);
+        try {
+            const completed = action === 'cancel'
+                ? await voidTransaction(txn.id)
+                : await deleteTransaction(txn.id);
+            if (completed === false) return;
+            setTransactionFeedback({
+                type: 'success',
+                message: action === 'cancel'
+                    ? 'Transaksi dibatalkan. Stok bahan terhubung (jika ada) sudah dikembalikan.'
+                    : isCanceledTransaction(txn.status)
+                        ? 'Riwayat transaksi dihapus. Pengembalian stok tetap tercatat.'
+                        : 'Transaksi dihapus. Stok bahan terhubung (jika ada) sudah dikembalikan.',
+            });
+        } catch (error) {
+            setTransactionFeedback({
+                type: 'error',
+                message: `Gagal ${action === 'cancel' ? 'membatalkan' : 'menghapus'} transaksi: ${error?.message || 'Coba lagi.'}`,
+            });
+        } finally {
+            transactionActionLock.current = false;
+            setTransactionAction(null);
+        }
+    };
+
     const exportCSV = () => {
         // Build CSV content
         const headers = ['ID Transaksi', 'Tanggal', 'Waktu', 'Produk', 'Qty', 'Harga Jual', 'HPP', 'Profit', 'Total', 'Metode Bayar'];
@@ -283,6 +323,9 @@ export default function ReportsPage() {
         link.click();
     };
 
+    const listedTxns = [...filteredTxns, ...canceledTxns]
+        .sort((a, b) => new Date(b.datetime) - new Date(a.datetime));
+
     if (authLoading || txnLoading) {
         return (
             <div className="app-container">
@@ -298,29 +341,31 @@ export default function ReportsPage() {
         <div className="app-container">
             <Sidebar activePage="reports" userRole={user?.role} />
 
-            <main className="main-content">
-                <header className="page-header">
+            <main className="main-content" style={{ minWidth: 0, maxWidth: '100%' }}>
+                <header className="page-header" style={{ minWidth: 0, maxWidth: '100%', flexWrap: 'wrap', gap: '8px' }}>
                     <div>
                         <h1 className="page-title">Laporan</h1>
                         <p className="text-secondary text-sm">Riwayat transaksi dan analisis</p>
                     </div>
 
-                    <button className="btn btn-primary" onClick={exportCSV} disabled={filteredTxns.length === 0}>
-                        📥 Export CSV
-                    </button>
-                    {user?.role === 'admin' && (
-                        <>
-                            <button className="btn btn-secondary ml-sm" onClick={() => setShowManualModal(true)}>
-                                ➕ Input Data Lama
-                            </button>
-                            <button className="btn btn-warning ml-sm" onClick={() => setShowExpenseModal(true)} style={{ marginLeft: '8px' }}>
-                                💸 Kelola Pengeluaran
-                            </button>
-                        </>
-                    )}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minWidth: 0, maxWidth: '100%' }}>
+                        <button className="btn btn-primary" style={{ minWidth: 0, whiteSpace: 'normal' }} onClick={exportCSV} disabled={filteredTxns.length === 0}>
+                            📥 Export CSV
+                        </button>
+                        {user?.role === 'admin' && (
+                            <>
+                                <button className="btn btn-secondary" style={{ minWidth: 0, whiteSpace: 'normal' }} onClick={() => setShowManualModal(true)}>
+                                    ➕ Input Data Lama
+                                </button>
+                                <button className="btn btn-warning" style={{ minWidth: 0, whiteSpace: 'normal' }} onClick={() => setShowExpenseModal(true)}>
+                                    💸 Kelola Pengeluaran
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </header>
 
-                <div style={{ padding: 'var(--spacing-lg)' }}>
+                <div style={{ padding: 'var(--spacing-lg)', minWidth: 0, maxWidth: '100%' }}>
                     {/* Date Filter */}
                     <div className="card" style={{ marginBottom: 'var(--spacing-lg)' }}>
                         <div className="card-body">
@@ -462,9 +507,17 @@ export default function ReportsPage() {
                     <div className="card">
                         <div className="card-header">
                             <h3 style={{ fontSize: 'var(--font-size-lg)' }}>
-                                Daftar Transaksi ({filteredTxns.length})
+                                Daftar Transaksi ({filteredTxns.length} aktif, {canceledTxns.length} dibatalkan)
                             </h3>
                         </div>
+                        {transactionFeedback && (
+                            <div
+                                role={transactionFeedback.type === 'error' ? 'alert' : 'status'}
+                                style={{ margin: 'var(--spacing-md)', padding: 'var(--spacing-md)', borderRadius: 'var(--radius-md)', color: transactionFeedback.type === 'error' ? 'var(--color-error)' : 'var(--color-success)', background: transactionFeedback.type === 'error' ? 'var(--color-error-bg)' : 'var(--color-success-bg)', overflowWrap: 'anywhere' }}
+                            >
+                                {transactionFeedback.message}
+                            </div>
+                        )}
                         <div className="card-body table-container" style={{ padding: 0, maxHeight: '500px', overflow: 'auto' }}>
                             <table className="table">
                                 <thead style={{ position: 'sticky', top: 0, background: 'var(--color-bg-secondary)' }}>
@@ -480,14 +533,15 @@ export default function ReportsPage() {
                                             </>
                                         )}
                                         <th className="hide-mobile">Metode</th>
+                                        <th>Status</th>
                                         <th style={{ textAlign: 'center' }}>Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredTxns.map(txn => {
+                                    {listedTxns.map(txn => {
                                         const items = JSON.parse(txn.items || '[]');
                                         return (
-                                            <tr key={txn.id}>
+                                            <tr key={txn.id} data-testid={`transaction-row-${txn.id}`}>
                                                 <td className="hide-mobile" style={{ fontFamily: 'monospace', fontSize: '12px' }}>{txn.id}</td>
                                                 <td className="text-secondary">{formatDate(txn.datetime)}</td>
                                                 <td>
@@ -519,24 +573,45 @@ export default function ReportsPage() {
                                                         {txn.payment_method === 'cash' ? 'Tunai' : 'QRIS'}
                                                     </span>
                                                 </td>
+                                                <td>
+                                                    <span className={`badge ${isCanceledTransaction(txn.status) ? 'badge-neutral' : 'badge-success'}`}>
+                                                        {isCanceledTransaction(txn.status) ? 'Dibatalkan' : txn.status === 'completed' ? 'Selesai' : txn.status}
+                                                    </span>
+                                                </td>
                                                 <td style={{ textAlign: 'center' }}>
                                                     {user?.role === 'admin' && (
-                                                        <button
-                                                            className="btn btn-ghost btn-xs"
-                                                            style={{ color: 'var(--color-error)' }}
-                                                            onClick={() => deleteTransaction(txn.id)}
-                                                            title="Hapus transaksi"
-                                                        >
-                                                            🗑️
-                                                        </button>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px', minWidth: '130px' }}>
+                                                            {txn.status === 'completed' && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-ghost btn-sm"
+                                                                    style={{ minHeight: '44px', color: 'var(--color-warning)' }}
+                                                                    onClick={() => handleTransactionAction(txn, 'cancel')}
+                                                                    disabled={Boolean(transactionAction)}
+                                                                    aria-label={`Batalkan transaksi ${txn.id}`}
+                                                                >
+                                                                    {transactionAction === `cancel:${txn.id}` ? 'Membatalkan…' : 'Batalkan'}
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-ghost btn-sm"
+                                                                style={{ minHeight: '44px', color: 'var(--color-error)' }}
+                                                                onClick={() => handleTransactionAction(txn, 'delete')}
+                                                                disabled={Boolean(transactionAction)}
+                                                                aria-label={`Hapus transaksi ${txn.id}`}
+                                                            >
+                                                                {transactionAction === `delete:${txn.id}` ? 'Menghapus…' : 'Hapus'}
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </td>
                                             </tr>
                                         );
                                     })}
-                                    {filteredTxns.length === 0 && (
+                                    {listedTxns.length === 0 && (
                                         <tr>
-                                            <td colSpan="8" style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
+                                            <td colSpan={user?.role === 'admin' ? 9 : 7} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
                                                 Tidak ada transaksi dalam periode ini
                                             </td>
                                         </tr>

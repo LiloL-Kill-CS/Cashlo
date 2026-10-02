@@ -45,10 +45,25 @@ receipt ID across retries; a lost response recovers the saved receipt without
 deducting ingredients twice. History includes the receipt ID and menu/dose
 snapshots. Inventory reloads when its tab becomes visible again.
 
+Use **Batalkan transaksi** in Reports to correct a whole wrong-input sale while
+keeping its receipt marked canceled. Permanently deleting a receipt also returns
+its linked ingredients. Both actions restore the exact original deduction to the
+current balance, once only: 750 ml becomes 735 ml after payment and 750 ml after
+cancellation. Canceling twice or deleting an already-canceled receipt cannot
+refill it again. Later restocking, waste, recipe edits, unlinking, and menu removal
+do not change the amount returned. Ingredient history retains the original use
+and a linked cancellation entry even after the receipt or menu is deleted.
+
+Cancellation and ingredient returns commit together. A unit mismatch or permission
+error leaves both receipt and stock intact and is shown in Reports. Admins can
+reverse their business's receipts; cashier database permissions cover their own
+receipts only. Reports remains an admin screen. Canceled receipts are excluded
+from sales totals and cannot be reactivated; enter the corrected sale anew.
+
 Do not manually record an already-paid POS sale in **Catat pakai**. Old receipts
-and manual historic entries are not retroactively consumed. Voiding or deleting a
-receipt does not put used ingredients back; reconcile measured stock with
-**Hitung ulang** when needed. HPP recipes remain a separate cost-calculation tool.
+and manual historic entries are not retroactively consumed and have no deduction
+to return. Removing a catalog menu does not cancel its earlier sales. Use
+**Hitung ulang** to reconcile physical usage when needed. HPP recipes remain a separate cost-calculation tool.
 Supply balances are business-wide; sellable-product stock remains per warehouse.
 
 ## Release setup
@@ -70,7 +85,11 @@ Supply balances are business-wide; sellable-product stock remains per warehouse.
    consumes ingredients only for completed POS payments. Existing receipts and
    stock are left intact. Its internal trigger function cannot be called through
    the public RPC API.
-6. Deploy the app using its normal release process.
+6. Apply `docs/sql/inventory-pos-reversals.sql` after the payment migration. It
+   adds linked, unique reversal history and an internal transaction update/delete
+   trigger. Existing account data, receipt statuses, and stock stay intact;
+   historical cancellations are not automatically rewritten.
+7. Deploy the app using its normal release process.
 
 The migrations were applied to the live database on October 1, 2026 as
 `20261001133634_reusable_cafe_inventory_stock` and
@@ -88,6 +107,14 @@ duplicate receipt IDs, multi-ingredient shortage rollback, and receipt deletion.
 Live REST payments verified 750 ml becomes 735 ml for one 15 ml menu and concurrent
 payments cannot overdraw ingredients. A fresh protected snapshot also covers
 the saved supply, its menu links, and ingredient history across 23 tables.
+
+Receipt reversal uses migration
+`20261002151813_pos_cancellation_returns_consumed_supplies`. Its isolated and live
+rollback suites verify exact credits, once-only returns after cancel/delete,
+recipe and catalog edits, later restocks/waste, ownership and role restrictions,
+unit mismatches, equivalent gram/g units, numeric overflow, and audit integrity.
+Live REST checks also verify concurrent cancellation/deletion and cashier-owned
+receipt reversal. The protected account snapshot matches across 23 tables.
 
 The stock and menu RPCs intentionally use `SECURITY DEFINER` for atomic balance and
 ledger writes. They pin the search path, check signed admin/owner claims, reject
@@ -111,6 +138,7 @@ npm run dev -- --webpack -p 3100
 # In another terminal:
 npm run test:inventory-ui
 npm run test:pos-inventory-ui
+npm run test:transaction-reversal-ui
 npm run build -- --webpack
 ```
 
@@ -130,6 +158,10 @@ The POS browser test runs completed payments against the same isolated database,
 then opens Inventory to check the resulting balance and history. It covers mixed
 menus, cashier sales, cancellation, simultaneous clicks, committed responses lost
 in transit, retries after payment details change, and stock-shortage errors.
+
+The reversal browser test pays through POS, cancels or deletes through Reports,
+and checks Inventory and the real PostgreSQL ledger. It covers once-only returns,
+manual history, cancellation/deletion errors, and phone/tablet/laptop layouts.
 
 Optional environment variables: `INVENTORY_TEST_URL` overrides localhost:3100;
 `PLAYWRIGHT_CHANNEL=chrome` uses installed Chrome; `PLAYWRIGHT_MODULE` points to

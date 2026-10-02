@@ -32,3 +32,13 @@ test('PostgreSQL POS payments: atomic ingredient deductions, cashier permissions
         }
     } finally { await db.close(); }
 });
+
+test('PostgreSQL canceled and deleted receipts: exact ingredient returns, once only, audit and permissions', async () => {
+    const db = await createStockTestDatabase();
+    try {
+        await db.exec(await readFile(new URL('../docs/sql/inventory-pos-reversals.rollback-test.sql', import.meta.url), 'utf8'));
+        for (const table of ['transactions', 'supplies', 'supply_stock_logs', 'supply_menu_links', 'products', 'users']) {
+            assert.equal((await db.query(`select count(*)::int n from public.${table}`)).rows[0].n, 0, `Residual rows in ${table}`);
+        }
+    } finally { await db.close(); }
+});
