@@ -342,7 +342,7 @@ export default function ReportsPage() {
             <Sidebar activePage="reports" userRole={user?.role} />
 
             <main className="main-content" style={{ minWidth: 0, maxWidth: '100%' }}>
-                <header className="page-header" style={{ minWidth: 0, maxWidth: '100%', flexWrap: 'wrap', gap: '8px' }}>
+                <header className="page-header" style={{ position: 'relative', minWidth: 0, maxWidth: '100%', flexWrap: 'wrap', gap: '8px' }}>
                     <div>
                         <h1 className="page-title">Laporan</h1>
                         <p className="text-secondary text-sm">Riwayat transaksi dan analisis</p>
@@ -357,7 +357,7 @@ export default function ReportsPage() {
                                 <button className="btn btn-secondary" style={{ minWidth: 0, whiteSpace: 'normal' }} onClick={() => setShowManualModal(true)}>
                                     ➕ Input Data Lama
                                 </button>
-                                <button className="btn btn-warning" style={{ minWidth: 0, whiteSpace: 'normal' }} onClick={() => setShowExpenseModal(true)}>
+                                <button className="btn btn-secondary" style={{ minWidth: 0, whiteSpace: 'normal' }} onClick={() => setShowExpenseModal(true)}>
                                     💸 Kelola Pengeluaran
                                 </button>
                             </>
