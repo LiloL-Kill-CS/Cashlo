@@ -169,46 +169,58 @@ export function useTransactions(userId, userRole, actualUserId) {
         return transaction;
     }
 
-    async function createManualTransaction(data) {
-        const id = generateTransactionId();
+    async function createManualTransaction(data, checkoutId = null) {
+        if (userRole !== 'admin' || !userId || !currentUserId) {
+            throw new Error('Hanya admin bisnis yang dapat menambahkan transaksi lama.');
+        }
+        const id = checkoutId || `${generateTransactionId()}-${crypto.randomUUID()}`;
         const { datetime, count, total_sell, total_cost, notes, items: providedItems } = data;
-
-        // Use provided items or create dummy item
-        const items = providedItems || [{
-            product_id: 'manual',
-            name: notes || 'Manual Transaction',
-            qty: count || 1,
-            sell_price: total_sell,
-            cost_price: total_cost,
-            total_sell: total_sell,
-            total_cost: total_cost,
-            profit: total_sell - total_cost
-        }];
+        if (!Array.isArray(providedItems) || !providedItems.length) {
+            throw new Error('Pilih menu atau bahan beserta jumlahnya agar stok dapat dihitung.');
+        }
+        const items = providedItems.map((item, index) => ({
+            ...item,
+            is_supply: item.is_supply ?? false,
+            ...(index === 0 && typeof notes === 'string' && notes.trim() ? { transaction_note: notes.trim() } : {}),
+        }));
+        const now = new Date().toISOString();
 
         const transaction = {
             id,
-            datetime: datetime || new Date().toISOString(),
+            datetime: datetime || now,
             user_id: currentUserId, // Log the actual user who made the manual transaction
+            owner_id: userId,
             customer_id: null,
             items: JSON.stringify(items),
             subtotal: total_sell,
             total_cost: total_cost,
             total_profit: total_sell - total_cost,
-            payment_method: data.payment_method || 'qr',
+            payment_method: data.payment_method === 'qris' ? 'qr' : data.payment_method || 'qr',
             cash_received: total_sell,
             change: 0,
             status: 'completed',
+            inventory_source: 'manual',
             manual_txn_count: count || 1, // Store the bulk count
-            created_at: new Date().toISOString()
+            created_at: now
         };
 
         const { error } = await supabase.from('transactions').insert([transaction]);
         if (error) {
-            console.error('Error creating manual transaction:', error);
+            // A lost response must recover the same backdated receipt and its
+            // ingredient deductions, rather than record the input a second time.
+            const { data: existing } = await supabase.from('transactions').select('*')
+                .eq('id', id).eq('owner_id', userId).eq('user_id', currentUserId).maybeSingle();
+            if (existing && existing.status === 'completed' && existing.inventory_source === 'manual'
+                && existing.items === transaction.items
+                && new Date(existing.datetime).getTime() === new Date(transaction.datetime).getTime()) {
+                await loadTransactions();
+                return existing;
+            }
             throw error;
         }
 
-        // NOTE: We SKIP inventory and customer updates for manual historic entries
+        // The database commits this receipt and its linked/direct ingredient
+        // consumption together. Historical input does not award customer points.
         await loadTransactions();
         return transaction;
     }

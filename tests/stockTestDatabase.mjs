@@ -71,5 +71,6 @@ export async function createStockTestDatabase(dataDir, { existing = false } = {}
     await db.exec(await readFile(new URL('../docs/sql/inventory-supply-menus.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../docs/sql/inventory-pos-consumption.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../docs/sql/inventory-pos-reversals.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20261006133343_manual_transaction_supply_consumption.sql', import.meta.url), 'utf8'));
     return db;
 }

@@ -45,6 +45,29 @@ receipt ID across retries; a lost response recovers the saved receipt without
 deducting ingredients twice. History includes the receipt ID and menu/dose
 snapshots. Inventory reloads when its tab becomes visible again.
 
+**Input Data Lama** now deducts supplies when a newly added receipt is saved.
+Selecting a coffee menu is sufficient: its saved supply links determine the
+ingredients. For example, one Kopder with a 15 ml Kopder syrup dose changes
+750 ml to 735 ml; 30 portions use 450 ml and leave 300 ml. Several selected menus
+can share a supply, and one menu can use several ingredients. Quantities are
+whole portions and can be entered directly. The summary previews the combined
+ingredient use; the database validates the current recipe and balance on save.
+
+Direct supply selections mean whole packages/bottles using the saved package
+size: one 750 ml bottle consumes 750 ml. Do not add that same ingredient directly
+when it is already represented by a selected menu unless both usages occurred.
+The receipt, every ingredient deduction, and its history commit together.
+Insufficient stock keeps the form open and leaves all balances and the receipt
+unchanged. An unchanged retry retains its receipt ID to avoid double deduction.
+Canceling or deleting these new manual receipts returns the recorded menu doses
+and direct package amounts exactly once, even after later recipe/package edits.
+
+A backdated receipt subtracts from today's recorded stock when entered. It does
+not reconstruct historical balances. Existing unmarked historic receipts stay
+unchanged, and customer points and warehouse product stock are not modified by
+manual entry. Use saved stock correction if physical usage was already counted;
+do not re-enter a sale already saved through POS.
+
 Use **Batalkan transaksi** in Reports to correct a whole wrong-input sale while
 keeping its receipt marked canceled. Permanently deleting a receipt also returns
 its linked ingredients. Both actions restore the exact original deduction to the
@@ -60,8 +83,8 @@ reverse their business's receipts; cashier database permissions cover their own
 receipts only. Reports remains an admin screen. Canceled receipts are excluded
 from sales totals and cannot be reactivated; enter the corrected sale anew.
 
-Do not manually record an already-paid POS sale in **Catat pakai**. Old receipts
-and manual historic entries are not retroactively consumed and have no deduction
+Do not manually record an already-paid POS sale in **Catat pakai**. Existing
+unmarked historic entries are not retroactively consumed and have no deduction
 to return. Removing a catalog menu does not cancel its earlier sales. Use
 **Hitung ulang** to reconcile physical usage when needed. HPP recipes remain a separate cost-calculation tool.
 Supply balances are business-wide; sellable-product stock remains per warehouse.
@@ -89,7 +112,12 @@ Supply balances are business-wide; sellable-product stock remains per warehouse.
    adds linked, unique reversal history and an internal transaction update/delete
    trigger. Existing account data, receipt statuses, and stock stay intact;
    historical cancellations are not automatically rewritten.
-7. Deploy the app using its normal release process.
+7. Apply `supabase/migrations/20261006133343_manual_transaction_supply_consumption.sql`
+   after the preceding migrations. It adds a private insert trigger for new
+   completed `inventory_source=manual` receipts and typed ledger keys. It keeps
+   existing account records, recipes, receipts, and stock untouched. Manual entry
+   requires an active signed business admin; POS keeps its cashier permissions.
+8. Deploy the app using its normal release process.
 
 The migrations were applied to the live database on October 1, 2026 as
 `20261001133634_reusable_cafe_inventory_stock` and
@@ -116,6 +144,17 @@ unit mismatches, equivalent gram/g units, numeric overflow, and audit integrity.
 Live REST checks also verify concurrent cancellation/deletion and cashier-owned
 receipt reversal. The protected account snapshot matches across 23 tables.
 
+Manual entry uses live migration
+`20261006134153_manual_transaction_supply_consumption` (October 6, 2026).
+Its isolated and live rollback suites verify linked Kopder doses, direct saved
+packages, shared balances, typed item IDs, atomic shortage/overflow errors,
+owner/admin restrictions, and exact refunds after recipe or package changes.
+Live REST checks with a separate synthetic owner verify 750 -> 735 -> 750 ml,
+30 coffees leaving 300 ml, saved package sizes, duplicate receipt IDs, mixed
+menus, shortage rollback, POS regression, and concurrent cancel/cancel/delete.
+The protected account snapshot still matches across 23 tables. The production
+build and 39 isolated browser checks passed, including phone/tablet/laptop flows.
+
 The stock and menu RPCs intentionally use `SECURITY DEFINER` for atomic balance and
 ledger writes. They pin the search path, check signed admin/owner claims, reject
 foreign-owner items, and deny anonymous execution. Supabase's advisor flags this
@@ -139,6 +178,7 @@ npm run dev -- --webpack -p 3100
 npm run test:inventory-ui
 npm run test:pos-inventory-ui
 npm run test:transaction-reversal-ui
+npm run test:manual-transaction-ui
 npm run build -- --webpack
 ```
 
@@ -162,6 +202,11 @@ in transit, retries after payment details change, and stock-shortage errors.
 The reversal browser test pays through POS, cancels or deletes through Reports,
 and checks Inventory and the real PostgreSQL ledger. It covers once-only returns,
 manual history, cancellation/deletion errors, and phone/tablet/laptop layouts.
+
+The manual-entry browser test uses the real Reports dialog and isolated
+PostgreSQL. It verifies Kopder menu doses, bulk quantities, direct packages,
+shared ingredients, stock-shortage rollback, repeated submit/lost responses,
+exact cancellation/deletion returns, and phone/tablet/laptop dialog layouts.
 
 Optional environment variables: `INVENTORY_TEST_URL` overrides localhost:3100;
 `PLAYWRIGHT_CHANNEL=chrome` uses installed Chrome; `PLAYWRIGHT_MODULE` points to

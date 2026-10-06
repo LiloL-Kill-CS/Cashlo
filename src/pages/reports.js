@@ -5,9 +5,12 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { useProducts } from '@/hooks/useProducts';
 import { useExpenses } from '@/hooks/useExpenses';
 import { usePurchasing } from '@/hooks/usePurchasing';
-import { formatCurrency, formatDate, formatNumberInput, parseNumberInput } from '@/lib/db';
+import { formatCurrency, formatDate, formatNumberInput, generateTransactionId, parseNumberInput } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 
 const isCanceledTransaction = status => ['voided', 'canceled', 'cancelled'].includes(status);
+const manualItemKey = item => `${item.is_supply ? 'supply' : 'menu'}:${item.product_id}`;
+const formatSupplyAmount = value => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 6 }).format(value);
 
 export default function ReportsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -41,25 +44,113 @@ export default function ReportsPage() {
     const [showExpenseModal, setShowExpenseModal] = useState(false);
     const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
     const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [] });
+    const [manualBusy, setManualBusy] = useState(false);
+    const [manualError, setManualError] = useState('');
+    const [manualLinks, setManualLinks] = useState([]);
+    const [manualLinksLoading, setManualLinksLoading] = useState(false);
+    const [manualLinksError, setManualLinksError] = useState(false);
+    const [manualCatalog, setManualCatalog] = useState([]);
+    const [manualCatalogLoading, setManualCatalogLoading] = useState(false);
+    const [manualCatalogError, setManualCatalogError] = useState(false);
+    const manualSubmitLock = useRef(false);
+    const manualCheckout = useRef(null);
+    const manualSignature = JSON.stringify(manualData);
+    const manualOwnerId = user?.owner_id || user?.id;
+    const manualSupplies = manualCatalogError ? supplies : manualCatalog;
+
+    useEffect(() => {
+        // A changed form is a new receipt. An unchanged retry keeps the same ID.
+        if (manualCheckout.current?.signature !== manualSignature) manualCheckout.current = null;
+    }, [manualSignature]);
+
+    useEffect(() => {
+        if (!showManualModal || !manualOwnerId) return;
+        let active = true;
+        setManualLinksLoading(true);
+        setManualLinksError(false);
+        setManualLinks([]);
+        supabase.from('supply_menu_links').select('supply_id,product_id,quantity_per_serving')
+            .eq('owner_id', manualOwnerId)
+            .then(({ data, error }) => {
+                if (!active) return;
+                setManualLinks(error ? [] : (data || []));
+                setManualLinksError(Boolean(error));
+                setManualLinksLoading(false);
+            }, () => {
+                if (!active) return;
+                setManualLinks([]);
+                setManualLinksError(true);
+                setManualLinksLoading(false);
+            });
+        return () => { active = false; };
+    }, [showManualModal, manualOwnerId]);
+
+    useEffect(() => {
+        if (!showManualModal || !manualOwnerId) return;
+        let active = true;
+        setManualCatalogLoading(true);
+        setManualCatalogError(false);
+        setManualCatalog([]);
+        supabase.from('supplies').select('id,name,unit,pack_size,stock,default_price')
+            .eq('owner_id', manualOwnerId).order('name')
+            .then(({ data, error }) => {
+                if (!active) return;
+                setManualCatalog(error ? [] : (data || []));
+                setManualCatalogError(Boolean(error));
+                setManualCatalogLoading(false);
+            }, () => {
+                if (!active) return;
+                setManualCatalog([]);
+                setManualCatalogError(true);
+                setManualCatalogLoading(false);
+            });
+        return () => { active = false; };
+    }, [showManualModal, manualOwnerId]);
+
+    useEffect(() => {
+        if (!showManualModal) return;
+        const handleManualEscape = event => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (!manualSubmitLock.current) setShowManualModal(false);
+        };
+        window.addEventListener('keydown', handleManualEscape, true);
+        return () => window.removeEventListener('keydown', handleManualEscape, true);
+    }, [showManualModal]);
 
     // Calculate totals from cart items
     const manualCartTotals = manualData.cartItems.reduce((acc, item) => ({
-        totalSell: acc.totalSell + (item.sell_price * item.qty),
-        totalCost: acc.totalCost + (item.cost_price * item.qty),
-        totalProfit: acc.totalProfit + ((item.sell_price - item.cost_price) * item.qty)
+        totalSell: acc.totalSell + (item.sell_price * (Number(item.qty) || 0)),
+        totalCost: acc.totalCost + (item.cost_price * (Number(item.qty) || 0)),
+        totalProfit: acc.totalProfit + ((item.sell_price - item.cost_price) * (Number(item.qty) || 0))
     }), { totalSell: 0, totalCost: 0, totalProfit: 0 });
+
+    const manualUsage = manualData.cartItems.reduce((usage, item) => {
+        const qty = Number(item.qty) || 0;
+        if (item.is_supply) {
+            const supply = manualSupplies.find(candidate => candidate.id === item.product_id);
+            const packSize = Number(item.pack_size || supply?.pack_size || 1);
+            usage[item.product_id] = (usage[item.product_id] || 0) + qty * packSize;
+        } else {
+            manualLinks.filter(link => link.product_id === item.product_id).forEach(link => {
+                usage[link.supply_id] = (usage[link.supply_id] || 0) + qty * Number(link.quantity_per_serving);
+            });
+        }
+        return usage;
+    }, {});
 
     const addProductToManualCart = (productId) => {
         const product = products.find(p => p.id === productId);
         if (!product) return;
 
         setManualData(prev => {
-            const existing = prev.cartItems.find(i => i.product_id === productId);
+            const existing = prev.cartItems.find(i => !i.is_supply && i.product_id === productId);
             if (existing) {
                 return {
                     ...prev,
                     cartItems: prev.cartItems.map(i =>
-                        i.product_id === productId ? { ...i, qty: i.qty + 1 } : i
+                        !i.is_supply && i.product_id === productId ? { ...i, qty: Number(i.qty || 0) + 1 } : i
                     )
                 };
             }
@@ -76,40 +167,31 @@ export default function ReportsPage() {
         });
     };
 
-    const updateManualCartQty = (productId, newQty) => {
-        if (newQty < 1) {
-            setManualData(prev => ({
-                ...prev,
-                cartItems: prev.cartItems.filter(i => i.product_id !== productId)
-            }));
-        } else {
-            setManualData(prev => ({
-                ...prev,
-                cartItems: prev.cartItems.map(i =>
-                    i.product_id === productId ? { ...i, qty: newQty } : i
-                )
-            }));
-        }
-    };
-
-    const removeFromManualCart = (productId) => {
+    const updateManualCartQty = (itemKey, newQty) => {
         setManualData(prev => ({
             ...prev,
-            cartItems: prev.cartItems.filter(i => i.product_id !== productId)
+            cartItems: prev.cartItems.map(item => manualItemKey(item) === itemKey ? { ...item, qty: newQty } : item)
+        }));
+    };
+
+    const removeFromManualCart = (itemKey) => {
+        setManualData(prev => ({
+            ...prev,
+            cartItems: prev.cartItems.filter(item => manualItemKey(item) !== itemKey)
         }));
     };
 
     const addSupplyToManualCart = (supplyId) => {
-        const supply = supplies.find(s => s.id === supplyId);
+        const supply = manualSupplies.find(s => s.id === supplyId);
         if (!supply) return;
 
         setManualData(prev => {
-            const existing = prev.cartItems.find(i => i.product_id === supplyId);
+            const existing = prev.cartItems.find(i => i.is_supply && i.product_id === supplyId);
             if (existing) {
                 return {
                     ...prev,
                     cartItems: prev.cartItems.map(i =>
-                        i.product_id === supplyId ? { ...i, qty: i.qty + 1 } : i
+                        i.is_supply && i.product_id === supplyId ? { ...i, qty: Number(i.qty || 0) + 1 } : i
                     )
                 };
             }
@@ -117,11 +199,13 @@ export default function ReportsPage() {
                 ...prev,
                 cartItems: [...prev.cartItems, {
                     product_id: supply.id,
-                    name: `📦 ${supply.name}`,
+                    name: supply.name,
                     qty: 1,
                     sell_price: supply.default_price || 0,
                     cost_price: supply.default_price || 0,
-                    is_supply: true
+                    is_supply: true,
+                    unit: supply.unit,
+                    pack_size: Number(supply.pack_size) || 1
                 }]
             };
         });
@@ -181,29 +265,46 @@ export default function ReportsPage() {
 
     const handleManualSubmit = async (e) => {
         e.preventDefault();
+        if (manualSubmitLock.current) return;
         if (!manualData.datetime) {
-            alert('Mohon pilih tanggal dan waktu');
+            setManualError('Mohon pilih tanggal dan waktu.');
             return;
         }
         if (manualData.cartItems.length === 0) {
-            alert('Mohon tambahkan minimal 1 produk');
+            setManualError('Mohon tambahkan minimal satu menu atau bahan.');
+            return;
+        }
+        if (manualData.cartItems.some(item => !Number.isSafeInteger(Number(item.qty)) || Number(item.qty) < 1)) {
+            setManualError('Jumlah porsi atau kemasan harus bilangan bulat minimal 1.');
             return;
         }
 
+        manualSubmitLock.current = true;
+        setManualBusy(true);
+        setManualError('');
         try {
             // Build items array from cart
             const items = manualData.cartItems.map(item => ({
                 product_id: item.product_id,
                 name: item.name,
-                qty: item.qty,
+                qty: Number(item.qty),
                 sell_price: item.sell_price,
                 cost_price: item.cost_price,
-                total_sell: item.sell_price * item.qty,
-                total_cost: item.cost_price * item.qty,
-                profit: (item.sell_price - item.cost_price) * item.qty
+                total_sell: item.sell_price * Number(item.qty),
+                total_cost: item.cost_price * Number(item.qty),
+                profit: (item.sell_price - item.cost_price) * Number(item.qty),
+                is_supply: Boolean(item.is_supply),
+                ...(item.is_supply ? { unit: item.unit, pack_size: Number(item.pack_size) } : {})
             }));
 
-            const totalQty = manualData.cartItems.reduce((sum, i) => sum + i.qty, 0);
+            const totalQty = manualData.cartItems.reduce((sum, item) => sum + Number(item.qty), 0);
+            const signature = JSON.stringify(manualData);
+            if (!manualCheckout.current || manualCheckout.current.signature !== signature) {
+                manualCheckout.current = {
+                    signature,
+                    id: `${generateTransactionId()}-${crypto.randomUUID()}`
+                };
+            }
 
             await createManualTransaction({
                 datetime: new Date(manualData.datetime).toISOString(),
@@ -213,13 +314,18 @@ export default function ReportsPage() {
                 notes: manualData.notes,
                 payment_method: manualData.paymentMethod,
                 items
-            });
+            }, manualCheckout.current.id);
 
+            manualCheckout.current = null;
             setShowManualModal(false);
-            setManualData({ datetime: '', notes: '', paymentMethod: 'cash', cartItems: [] });
-            alert('Data lama berhasil ditambahkan! Pastikan filter tanggal mencakup tanggal data baru.');
+            setManualData({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [] });
+            setTransactionFeedback({ type: 'success', message: 'Data lama tersimpan. Stok bahan saat ini sudah diperbarui sesuai takaran menu dan jumlah kemasan. Pastikan filter tanggal mencakup tanggal transaksi.' });
+            alert('Data lama tersimpan dan stok bahan saat ini sudah diperbarui. Pastikan filter laporan mencakup tanggal transaksi.');
         } catch (error) {
-            alert('Error: ' + error.message);
+            setManualError(error?.message || 'Gagal menyimpan transaksi lama. Coba lagi tanpa mengubah data agar transaksi tidak tercatat dua kali.');
+        } finally {
+            manualSubmitLock.current = false;
+            setManualBusy(false);
         }
     };
 
@@ -623,22 +729,25 @@ export default function ReportsPage() {
                 </div>
             </main>
             {showManualModal && (
-                <div className="modal-overlay" onClick={() => setShowManualModal(false)}>
-                    <div className="modal" style={{ maxWidth: '700px', width: '95%' }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay" onClick={() => { if (!manualSubmitLock.current) setShowManualModal(false); }}>
+                    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="manual-transaction-title" aria-busy={manualBusy} style={{ maxWidth: '700px', width: 'min(95%, 700px)', minWidth: 0 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Input Data Transaksi Lama</h3>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setShowManualModal(false)}>✕</button>
+                            <h3 id="manual-transaction-title">Input Data Transaksi Lama</h3>
+                            <button type="button" className="btn btn-ghost btn-icon" aria-label="Tutup input data lama" disabled={manualBusy} onClick={() => setShowManualModal(false)}>✕</button>
                         </div>
                         <form onSubmit={handleManualSubmit}>
-                            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                            <fieldset disabled={manualBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+                            <div className="modal-body" style={{ maxHeight: 'min(65vh, calc(100dvh - 150px))', overflowY: 'auto', minWidth: 0 }}>
                                 <div className="alert alert-info mb-md" style={{ fontSize: '13px', background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '10px', borderRadius: '6px' }}>
-                                    ℹ️ Pilih beberapa produk sekaligus untuk 1 transaksi. Stok tidak akan berkurang.
+                                    Cukup pilih menu untuk mengurangi stok bahan terhubung sesuai takaran tersimpan. Pilih bahan langsung hanya untuk pemakaian lain, agar bahan yang sama tidak terpotong dua kali. Jumlah bahan langsung dihitung per kemasan. Jangan input ulang transaksi yang sudah dicatat melalui POS.
+                                    <div style={{ marginTop: '8px' }}>Batal di formulir ini hanya menutup input yang belum disimpan; stok tidak berubah. Jika transaksi tersimpan dibatalkan atau dihapus dari laporan, bahan yang terpotong dikembalikan satu kali.</div>
                                 </div>
-                                
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
                                     <div>
-                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>Tanggal & Waktu *</label>
+                                        <label htmlFor="manual-datetime" className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>Tanggal & Waktu *</label>
                                         <input
+                                            id="manual-datetime"
                                             type="datetime-local"
                                             className="input"
                                             required
@@ -647,8 +756,9 @@ export default function ReportsPage() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>Catatan</label>
+                                        <label htmlFor="manual-notes" className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>Catatan</label>
                                         <input
+                                            id="manual-notes"
                                             type="text"
                                             className="input"
                                             placeholder="Contoh: Rekap Januari"
@@ -676,8 +786,8 @@ export default function ReportsPage() {
                                             <input
                                                 type="radio"
                                                 name="paymentMethod"
-                                                value="qris"
-                                                checked={manualData.paymentMethod === 'qris'}
+                                                value="qr"
+                                                checked={manualData.paymentMethod === 'qr'}
                                                 onChange={e => setManualData({ ...manualData, paymentMethod: e.target.value })}
                                                 style={{ transform: 'scale(1.2)' }}
                                             />
@@ -688,7 +798,7 @@ export default function ReportsPage() {
 
                                 {/* Product Grid */}
                                 <div style={{ marginBottom: '16px' }}>
-                                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>Pilih Produk (Klik untuk tambah)</label>
+                                    <div className="text-sm text-secondary" style={{ marginBottom: '8px' }}>Pilih menu (klik untuk tambah porsi)</div>
                                     <div style={{
                                         display: 'grid',
                                         gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
@@ -704,12 +814,13 @@ export default function ReportsPage() {
                                                 type="button"
                                                 key={p.id}
                                                 onClick={() => addProductToManualCart(p.id)}
+                                                aria-label={`Tambah menu ${p.name}`}
                                                 style={{
-                                                    padding: '10px 8px',
-                                                    background: manualData.cartItems.some(i => i.product_id === p.id)
+                                                    padding: '10px 8px', minHeight: '44px', overflowWrap: 'anywhere',
+                                                    background: manualData.cartItems.some(i => !i.is_supply && i.product_id === p.id)
                                                         ? 'var(--color-primary)'
                                                         : 'var(--color-bg-tertiary)',
-                                                    color: manualData.cartItems.some(i => i.product_id === p.id)
+                                                    color: manualData.cartItems.some(i => !i.is_supply && i.product_id === p.id)
                                                         ? '#000'
                                                         : 'inherit',
                                                     border: 'none',
@@ -732,9 +843,11 @@ export default function ReportsPage() {
                                 </div>
 
                                 {/* Supplies (Non-Menu Items) Grid */}
-                                {supplies && supplies.length > 0 && (
+                                {manualCatalogLoading && <div className="text-sm text-secondary" style={{ marginBottom: '12px' }}>Memuat stok bahan terbaru...</div>}
+                                {manualCatalogError && <div role="status" style={{ marginBottom: '12px', color: 'var(--color-warning)', overflowWrap: 'anywhere' }}>Daftar bahan terbaru tidak tersedia; pilihan lama ditampilkan. Ukuran kemasan atau stok mungkin sudah berubah. Pemeriksaan akhir dilakukan saat menyimpan.</div>}
+                                {manualSupplies.length > 0 && !manualCatalogLoading && (
                                     <div style={{ marginBottom: '16px' }}>
-                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>📦 Tambah Bahan/Supply (Non-Menu):</label>
+                                        <div className="text-sm text-secondary" style={{ marginBottom: '8px' }}>Tambah bahan langsung (klik untuk tambah kemasan)</div>
                                         <div style={{
                                             display: 'grid',
                                             gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
@@ -745,17 +858,18 @@ export default function ReportsPage() {
                                             background: 'var(--color-bg-secondary)',
                                             borderRadius: '8px'
                                         }}>
-                                            {supplies.map(s => (
+                                            {manualSupplies.map(s => (
                                                 <button
                                                     type="button"
                                                     key={s.id}
                                                     onClick={() => addSupplyToManualCart(s.id)}
+                                                    aria-label={`Tambah bahan ${s.name}`}
                                                     style={{
-                                                        padding: '10px 8px',
-                                                        background: manualData.cartItems.some(i => i.product_id === s.id)
+                                                        padding: '10px 8px', minHeight: '44px', overflowWrap: 'anywhere',
+                                                        background: manualData.cartItems.some(i => i.is_supply && i.product_id === s.id)
                                                             ? 'var(--color-warning)'
                                                             : 'var(--color-bg-tertiary)',
-                                                        color: manualData.cartItems.some(i => i.product_id === s.id)
+                                                        color: manualData.cartItems.some(i => i.is_supply && i.product_id === s.id)
                                                             ? '#000'
                                                             : 'inherit',
                                                         border: 'none',
@@ -766,7 +880,7 @@ export default function ReportsPage() {
                                                     }}
                                                 >
                                                     <div style={{ fontWeight: '500', marginBottom: '2px' }}>📦 {s.name}</div>
-                                                    <div style={{ fontSize: '10px', opacity: 0.8 }}>{s.unit} - {formatCurrency(s.default_price || 0)}</div>
+                                                    <div style={{ fontSize: '10px', opacity: 0.8 }}>1 kemasan = {formatSupplyAmount(Number(s.pack_size) || 1)} {s.unit} · {formatCurrency(s.default_price || 0)}</div>
                                                 </button>
                                             ))}
                                         </div>
@@ -776,35 +890,66 @@ export default function ReportsPage() {
                                 {/* Cart Items */}
                                 {manualData.cartItems.length > 0 && (
                                     <div style={{ marginBottom: '16px' }}>
-                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '8px' }}>
-                                            Produk Dipilih ({manualData.cartItems.length})
-                                        </label>
+                                        <div className="text-sm text-secondary" style={{ marginBottom: '8px' }}>Dipilih ({manualData.cartItems.length})</div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                             {manualData.cartItems.map(item => (
-                                                <div key={item.product_id} style={{
+                                                <div key={manualItemKey(item)} style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'space-between',
+                                                    flexWrap: 'wrap', gap: '10px', minWidth: 0,
                                                     padding: '10px 12px',
                                                     background: 'var(--color-bg-tertiary)',
                                                     borderRadius: '8px'
                                                 }}>
-                                                    <div style={{ flex: 1 }}>
-                                                        <div style={{ fontWeight: '500' }}>{item.name}</div>
+                                                    <div style={{ flex: '1 1 150px', minWidth: 0, overflowWrap: 'anywhere' }}>
+                                                        <div style={{ fontWeight: '500' }}>{item.is_supply ? '📦 ' : ''}{item.name}</div>
                                                         <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                                                            {formatCurrency(item.sell_price)} × {item.qty} = {formatCurrency(item.sell_price * item.qty)}
+                                                            {item.is_supply && `1 kemasan = ${formatSupplyAmount(Number(item.pack_size) || 1)} ${item.unit} · `}{formatCurrency(item.sell_price)} × {item.qty || 0} = {formatCurrency(item.sell_price * (Number(item.qty) || 0))}
                                                         </div>
+                                                        {!item.is_supply && !manualLinksLoading && !manualLinksError && (manualLinks.some(link => link.product_id === item.product_id)
+                                                            ? <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                                                                {manualLinks.filter(link => link.product_id === item.product_id).map(link => {
+                                                                    const supply = manualSupplies.find(candidate => candidate.id === link.supply_id);
+                                                                    return `${supply?.name || 'Bahan'}: ${formatSupplyAmount(Number(link.quantity_per_serving))} ${supply?.unit || 'unit'} / porsi`;
+                                                                }).join(' · ')}
+                                                            </div>
+                                                            : <div style={{ fontSize: '12px', color: 'var(--color-warning)' }}>Belum ada bahan terhubung; menu ini tidak mengurangi stok bahan.</div>)}
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => updateManualCartQty(item.product_id, item.qty - 1)}>−</button>
-                                                        <span style={{ minWidth: '24px', textAlign: 'center', fontWeight: '600' }}>{item.qty}</span>
-                                                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => updateManualCartQty(item.product_id, item.qty + 1)}>+</button>
-                                                        <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => removeFromManualCart(item.product_id)}>✕</button>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                        <button type="button" className="btn btn-ghost btn-sm" style={{ minWidth: '44px', minHeight: '44px' }} aria-label={`Kurangi ${item.is_supply ? 'kemasan' : 'porsi'} ${item.name}`} onClick={() => Number(item.qty) <= 1 ? removeFromManualCart(manualItemKey(item)) : updateManualCartQty(manualItemKey(item), Number(item.qty) - 1)}>−</button>
+                                                        <input type="number" className="input input-sm" inputMode="numeric" min="1" step="1" required style={{ width: '72px', minHeight: '44px', textAlign: 'center', padding: '4px' }} aria-label={`Jumlah ${item.is_supply ? 'kemasan' : 'porsi'} ${item.name}`} value={item.qty} onChange={event => updateManualCartQty(manualItemKey(item), event.target.value)} />
+                                                        <button type="button" className="btn btn-ghost btn-sm" style={{ minWidth: '44px', minHeight: '44px' }} aria-label={`Tambah ${item.is_supply ? 'kemasan' : 'porsi'} ${item.name}`} onClick={() => updateManualCartQty(manualItemKey(item), Number(item.qty || 0) + 1)}>+</button>
+                                                        <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)', minWidth: '44px', minHeight: '44px' }} aria-label={`Hapus ${item.is_supply ? 'bahan' : 'menu'} ${item.name}`} onClick={() => removeFromManualCart(manualItemKey(item))}>✕</button>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
+                                )}
+
+                                {manualData.cartItems.length > 0 && (
+                                    <section role="region" aria-label="Perkiraan pemakaian bahan" style={{ marginBottom: '16px', padding: '12px', border: '1px solid var(--color-border)', borderRadius: '8px', background: 'var(--color-bg-secondary)', overflowWrap: 'anywhere' }}>
+                                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>Perkiraan pemakaian bahan</div>
+                                        <p className="text-sm text-secondary" style={{ margin: '0 0 8px' }}>Takaran menu adalah jumlah nominal tersimpan. Jumlah bahan langsung dihitung dalam kemasan. Stok terakhir dimuat saat membuka formulir; stok aktual diperiksa lagi saat menyimpan.</p>
+                                        {(manualLinksLoading || manualCatalogLoading) ? <div className="text-sm text-secondary">Memuat takaran dan stok bahan...</div> : null}
+                                        {manualLinksError ? <div className="text-sm text-secondary">Pratinjau takaran menu belum tersedia. Pemeriksaan stok tetap dilakukan saat menyimpan.</div> : null}
+                                        {manualCatalogError ? <div className="text-sm text-secondary">Pratinjau stok tidak tersedia karena daftar bahan terbaru gagal dimuat. Stok aktual diperiksa saat menyimpan.</div> : null}
+                                        {!manualLinksLoading && !manualCatalogLoading && !manualLinksError && !manualCatalogError && Object.keys(manualUsage).length === 0 && (
+                                            <div className="text-sm text-secondary">Belum ada bahan terhubung untuk menu yang dipilih.</div>
+                                        )}
+                                        {!manualLinksLoading && !manualCatalogLoading && !manualLinksError && !manualCatalogError && Object.entries(manualUsage).map(([supplyId, amount]) => {
+                                            const supply = manualSupplies.find(candidate => candidate.id === supplyId);
+                                            const roundedAmount = Math.round(amount * 1000000) / 1000000;
+                                            const available = Number(supply?.stock);
+                                            const shortStock = supply && Number.isFinite(available) && roundedAmount > available + 0.000001;
+                                            return <div key={supplyId} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px', padding: '5px 0' }}>
+                                                <span>{supply?.name || 'Bahan'}: <strong>{formatSupplyAmount(roundedAmount)} {supply?.unit || ''}</strong></span>
+                                                {supply && <span className="text-sm text-secondary">Stok terakhir: {formatSupplyAmount(available)} {supply.unit}</span>}
+                                                {shortStock && <span role="alert" style={{ flexBasis: '100%', color: 'var(--color-error)' }}>Stok {supply.name} tidak cukup untuk jumlah ini. Kurangi jumlah atau tambah stok sebelum menyimpan.</span>}
+                                            </div>;
+                                        })}
+                                    </section>
                                 )}
 
                                 {/* Totals Summary */}
@@ -822,11 +967,13 @@ export default function ReportsPage() {
                                         <span style={{ color: 'var(--color-success)', fontWeight: '700' }}>+{formatCurrency(manualCartTotals.totalProfit)}</span>
                                     </div>
                                 </div>
+                                {manualError && <div role="alert" style={{ marginTop: '12px', padding: '10px', borderRadius: '6px', background: 'var(--color-error-bg)', color: 'var(--color-error)', overflowWrap: 'anywhere' }}>{manualError}</div>}
                             </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-ghost" onClick={() => setShowManualModal(false)}>Batal</button>
-                                <button type="submit" className="btn btn-primary">Simpan Data Lama</button>
+                            <div className="modal-footer" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                <button type="button" className="btn btn-ghost" style={{ minHeight: '44px' }} onClick={() => setShowManualModal(false)}>Batal</button>
+                                <button type="submit" className="btn btn-primary" style={{ minHeight: '44px' }}>{manualBusy ? 'Menyimpan...' : 'Simpan Data Lama'}</button>
                             </div>
+                            </fieldset>
                         </form>
                     </div>
                 </div>

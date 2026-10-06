@@ -42,3 +42,13 @@ test('PostgreSQL canceled and deleted receipts: exact ingredient returns, once o
         }
     } finally { await db.close(); }
 });
+
+test('PostgreSQL manual receipts: menu doses, direct packages, shared balances, atomic shortages and exact reversals', async () => {
+    const db = await createStockTestDatabase();
+    try {
+        await db.exec(await readFile(new URL('../docs/sql/inventory-manual-consumption.rollback-test.sql', import.meta.url), 'utf8'));
+        for (const table of ['transactions', 'supplies', 'supply_stock_logs', 'supply_menu_links', 'products', 'users']) {
+            assert.equal((await db.query(`select count(*)::int n from public.${table}`)).rows[0].n, 0, `Residual rows in ${table}`);
+        }
+    } finally { await db.close(); }
+});
