@@ -298,6 +298,17 @@ try {
         await page.setViewportSize({ width: device.width, height: device.height });
         await openForm();
         await addMenu('Kopder');
+        const selectedMenu = dialog().getByRole('button', { name: 'Tambah menu Kopder', exact: true });
+        assert.equal(await selectedMenu.getAttribute('aria-pressed'), 'true', `${device.name} selected menu state`);
+        const accent = await selectedMenu.evaluate(button => {
+            const probe = document.createElement('span');
+            probe.style.backgroundColor = 'var(--color-accent)';
+            document.body.appendChild(probe);
+            const expected = getComputedStyle(probe).backgroundColor;
+            probe.remove();
+            return { actual: getComputedStyle(button).backgroundColor, expected };
+        });
+        assert.equal(accent.actual, accent.expected, `${device.name} selected menu accent`);
         const bounds = await dialog().boundingBox();
         assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= device.width, `${device.name} modal clipped`);
         assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= device.height, `${device.name} modal too tall`);

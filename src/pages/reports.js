@@ -815,10 +815,11 @@ export default function ReportsPage() {
                                                 key={p.id}
                                                 onClick={() => addProductToManualCart(p.id)}
                                                 aria-label={`Tambah menu ${p.name}`}
+                                                aria-pressed={manualData.cartItems.some(i => !i.is_supply && i.product_id === p.id)}
                                                 style={{
                                                     padding: '10px 8px', minHeight: '44px', overflowWrap: 'anywhere',
                                                     background: manualData.cartItems.some(i => !i.is_supply && i.product_id === p.id)
-                                                        ? 'var(--color-primary)'
+                                                        ? 'var(--color-accent)'
                                                         : 'var(--color-bg-tertiary)',
                                                     color: manualData.cartItems.some(i => !i.is_supply && i.product_id === p.id)
                                                         ? '#000'
@@ -864,6 +865,7 @@ export default function ReportsPage() {
                                                     key={s.id}
                                                     onClick={() => addSupplyToManualCart(s.id)}
                                                     aria-label={`Tambah bahan ${s.name}`}
+                                                    aria-pressed={manualData.cartItems.some(i => i.is_supply && i.product_id === s.id)}
                                                     style={{
                                                         padding: '10px 8px', minHeight: '44px', overflowWrap: 'anywhere',
                                                         background: manualData.cartItems.some(i => i.is_supply && i.product_id === s.id)
