@@ -189,7 +189,7 @@ export default function InventoryPage() {
                 <section className={styles.stats} aria-label="Ringkasan inventory">
                     <div><span>Item tersimpan</span><strong>{items.length}</strong><small>Siap dipakai kembali</small></div>
                     <div><span>Perlu isi ulang</span><strong className={items.some(low) ? styles.warningText : ''}>{items.filter(low).length}</strong><small>Mencapai batas minimum</small></div>
-                    <div><span>Takaran tersimpan</span><strong>{items.filter(item => item.servings_per_pack || menusFor(item).length).length}</strong><small>Takaran bahan untuk porsi atau menu</small></div>
+                    <div><span>Bahan terhubung ke menu</span><strong>{items.filter(item => menusFor(item).length).length}</strong><small>Otomatis berkurang saat transaksi</small></div>
                 </section>
                 <nav className={styles.tabs} aria-label="Bagian inventory">{[['supplies', 'Bahan & perlengkapan'], ['history', 'Riwayat bahan'], ['products', 'Stok menu'], ['locations', 'Lokasi']].map(([value, label]) => <button key={value} aria-current={tab === value ? 'page' : undefined} className={tab === value ? styles.tabActive : ''} onClick={() => { setTab(value); setSearch(''); }}>{label}</button>)}</nav>
                 {(authLoading || ((['supplies', 'history'].includes(tab) ? suppliesLoading : loading) && !modal)) ? <div className={styles.empty} role="status">Memuat inventory…</div> : <>
@@ -204,6 +204,7 @@ export default function InventoryPage() {
                             return <article key={item.id} className={styles.item} aria-label={item.name}>
                                 <div className={styles.itemTop}><span className={styles.itemIcon} aria-hidden="true">{['ml', 'l'].includes(item.unit) ? '◒' : item.unit === 'pcs' ? '▤' : '◈'}</span><span className={low(item) ? styles.lowBadge : styles.goodBadge}>{quantity === 0 ? 'Habis' : low(item) ? 'Stok menipis' : 'Tersedia'}</span></div>
                                 <h2>{item.name}</h2><p className={styles.pack}>{number(pack)} {unitLabel(item.unit)} / kemasan{!linkedMenus.length && item.servings_per_pack ? ` · ${number(item.servings_per_pack)} ${item.usage_label || 'porsi'}` : ''}</p>
+                                {!linkedMenus.length && <p className={styles.warningText}>Belum terhubung ke menu; transaksi belum mengurangi item ini. {admin && <Link href="/products">Atur bahan di Produk</Link>}</p>}
                                 <div className={styles.quantity}><strong>{number(quantity)}</strong><span>{unitLabel(item.unit)} {linkedMenus.length ? 'sisa tercatat' : 'tersisa'}</span></div>
                                 <div className={styles.meter} role="meter" aria-label={`Sisa ${item.name} dibanding satu kemasan`} aria-valuemin={0} aria-valuemax={pack} aria-valuenow={Math.min(quantity, pack)} aria-valuetext={`${number(quantity)} ${unitLabel(item.unit)} ${linkedMenus.length ? 'sisa tercatat' : 'tersisa'}`}><span className={low(item) ? styles.meterLow : ''} style={{ width: `${Math.min(100, quantity / pack * 100)}%` }} /></div>
                                 {linkedMenus.length ? <div className={styles.menuCapacity}><span>Jika stok ini hanya dipakai untuk satu menu (perkiraan nominal):</span><ul>{linkedMenus.map(link => {

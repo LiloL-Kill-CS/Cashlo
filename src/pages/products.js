@@ -1,12 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useProducts } from '@/hooks/useProducts';
 import { formatCurrency, formatNumberInput, parseNumberInput } from '@/lib/db';
+import { parseSupplyQuantity, quantityPerServing } from '@/lib/inventoryQuantities';
+import styles from '@/styles/Products.module.css';
+
+const unitLabel = unit => unit === 'gram' ? 'g' : unit;
+const formatDose = value => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 6 }).format(Number(value) || 0);
 
 export default function ProductsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { products, categories, loading, addProduct, updateProduct, deleteProduct, addCategory, reload } = useProducts((user?.owner_id || user?.id), user?.role);
+    const { products, categories, loading, productError, supplyCatalog = [], supplyLinks = [], recipeLoading = false, recipeError,
+        addProduct, updateProduct, deleteProduct, addCategory, refreshRecipes, reload } = useProducts((user?.owner_id || user?.id), user?.role, { includeSupplies: true });
 
     const [showModal, setShowModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
@@ -14,6 +21,15 @@ export default function ProductsPage() {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
+    const [recipeRows, setRecipeRows] = useState([]);
+    const [untrackedAcknowledged, setUntrackedAcknowledged] = useState(false);
+    const [saveError, setSaveError] = useState('');
+    const [saving, setSaving] = useState(false);
+    const submitLock = useRef(false);
+    const draftProductId = useRef(null);
+    const nextRecipeRowId = useRef(0);
+    const dialogRef = useRef(null);
+    const openerRef = useRef(null);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -30,6 +46,13 @@ export default function ProductsPage() {
         }
     }, [user, authLoading]);
 
+    useEffect(() => {
+        if (!showModal) return;
+        const previous = openerRef.current;
+        dialogRef.current?.querySelector('input, select, button')?.focus();
+        return () => previous?.focus();
+    }, [showModal]);
+
     const filteredProducts = products.filter(p => {
         const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
@@ -37,7 +60,13 @@ export default function ProductsPage() {
     });
 
     const openAddModal = () => {
+        if (recipeLoading || recipeError || productError) return;
+        openerRef.current = document.activeElement;
+        draftProductId.current = `prod-${crypto.randomUUID()}`;
         setEditingProduct(null);
+        setRecipeRows([]);
+        setUntrackedAcknowledged(false);
+        setSaveError('');
         setFormData({
             name: '',
             category: categories[0]?.id || '',
@@ -49,7 +78,18 @@ export default function ProductsPage() {
     };
 
     const openEditModal = (product) => {
+        if (recipeLoading || recipeError || productError) return;
+        openerRef.current = document.activeElement;
+        draftProductId.current = null;
         setEditingProduct(product);
+        setRecipeRows(supplyLinks.filter(link => String(link.product_id) === String(product.id)).map(link => ({
+            rowId: ++nextRecipeRowId.current,
+            supply_id: String(link.supply_id),
+            quantity_per_serving: String(link.quantity_per_serving),
+            quantity_tolerance: String(link.quantity_tolerance ?? 0)
+        })));
+        setUntrackedAcknowledged(false);
+        setSaveError('');
         setFormData({
             name: product.name,
             category: product.category,
@@ -60,10 +100,64 @@ export default function ProductsPage() {
         setShowModal(true);
     };
 
+    const closeModal = () => {
+        if (submitLock.current) return;
+        setShowModal(false);
+        setSaveError('');
+    };
+
+    const addRecipeRow = () => {
+        if (recipeRows.length >= 100 || recipeRows.length >= supplyCatalog.length) return;
+        setRecipeRows(previous => [...previous, { rowId: ++nextRecipeRowId.current, supply_id: '', quantity_per_serving: '', quantity_tolerance: '0' }]);
+        setUntrackedAcknowledged(false);
+    };
+
+    const updateRecipeRow = (rowId, field, value) => {
+        setRecipeRows(previous => previous.map(row => {
+            if (row.rowId !== rowId) return row;
+            if (field !== 'supply_id') return { ...row, [field]: value };
+            const supply = supplyCatalog.find(item => String(item.id) === value);
+            let suggestedDose = '';
+            if (supply?.servings_per_pack) {
+                try { suggestedDose = String(quantityPerServing(supply.pack_size, supply.servings_per_pack)); }
+                catch { suggestedDose = ''; }
+            }
+            return { ...row, supply_id: value, quantity_per_serving: suggestedDose, quantity_tolerance: '0' };
+        }));
+    };
+
+    const removeRecipeRow = rowId => setRecipeRows(previous => previous.filter(row => row.rowId !== rowId));
+
+    const recipeFor = productId => supplyLinks.filter(link => String(link.product_id) === String(productId));
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (submitLock.current) return;
+        if (recipeLoading || recipeError || productError) {
+            setSaveError('Data produk atau bahan belum siap. Muat ulang sebelum menyimpan lagi.');
+            return;
+        }
+        if (!recipeRows.length && !untrackedAcknowledged) {
+            setSaveError('Tambahkan bahan per porsi, atau centang bahwa produk ini tidak memakai bahan inventory.');
+            return;
+        }
 
+        submitLock.current = true;
+        setSaving(true);
+        setSaveError('');
         try {
+            const supplies = recipeRows.map((row, index) => {
+                if (!row.supply_id || !supplyCatalog.some(item => String(item.id) === row.supply_id)) {
+                    throw new Error(`Pilih bahan ${index + 1} yang tersedia di inventory.`);
+                }
+                const quantity = parseSupplyQuantity(row.quantity_per_serving, `Takaran bahan ${index + 1}`);
+                const tolerance = parseSupplyQuantity(row.quantity_tolerance, `Variasi bahan ${index + 1}`, { allowZero: true });
+                if (tolerance >= quantity) throw new Error(`Variasi bahan ${index + 1} harus lebih kecil dari takarannya.`);
+                return { supply_id: row.supply_id, quantity_per_serving: quantity, quantity_tolerance: tolerance };
+            });
+            if (new Set(supplies.map(item => item.supply_id)).size !== supplies.length) {
+                throw new Error('Satu bahan cukup ditambahkan sekali untuk menu ini.');
+            }
             // Clean up modifiers - ensure price is numeric and filter empty ones
             const cleanModifiers = formData.modifiers
                 .filter(m => m.name.trim() !== '')
@@ -74,7 +168,8 @@ export default function ProductsPage() {
                 }));
 
             const productData = {
-                name: formData.name,
+                ...(!editingProduct ? { id: draftProductId.current } : {}),
+                name: formData.name.trim(),
                 category: formData.category,
                 sell_price: parseInt(formData.sell_price) || 0,
                 cost_price: parseInt(formData.cost_price) || 0,
@@ -82,17 +177,19 @@ export default function ProductsPage() {
             };
 
             if (editingProduct) {
-                await updateProduct(editingProduct.id, productData);
-                alert('Produk berhasil diperbarui!');
+                await updateProduct(editingProduct.id, productData, supplies);
             } else {
-                await addProduct(productData);
-                alert('Produk berhasil ditambahkan!');
+                await addProduct(productData, supplies);
             }
 
             setShowModal(false);
+            draftProductId.current = null;
         } catch (error) {
             console.error('Error saving product:', error);
-            alert('Gagal menyimpan produk: ' + error.message);
+            setSaveError(error?.message || 'Gagal menyimpan produk. Coba lagi tanpa mengubah formulir.');
+        } finally {
+            submitLock.current = false;
+            setSaving(false);
         }
     };
 
@@ -163,16 +260,16 @@ export default function ProductsPage() {
                 <header className="page-header">
                     <div>
                         <h1 className="page-title">Produk</h1>
-                        <p className="text-secondary text-sm">Kelola menu dan harga</p>
+                        <p className="text-secondary text-sm">Kelola menu, harga, dan bahan per porsi</p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-sm)', minWidth: 0 }}>
                         {user?.role === 'admin' && (
                             <>
                                 <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
                                     📁 Kategori
                                 </button>
-                                <button className="btn btn-primary" onClick={openAddModal}>
+                                <button className="btn btn-primary" onClick={openAddModal} disabled={recipeLoading || Boolean(recipeError) || Boolean(productError)}>
                                     + Tambah Produk
                                 </button>
                             </>
@@ -181,6 +278,8 @@ export default function ProductsPage() {
                 </header>
 
                 <div style={{ padding: 'var(--spacing-lg)' }}>
+                    {productError && <div className={styles.recipeLoadError} role="alert">{productError} <button type="button" className="btn btn-secondary" onClick={() => reload?.()}>Muat ulang produk</button></div>}
+                    {recipeError && <div className={styles.recipeLoadError} role="alert">Data bahan belum bisa dimuat. Produk belum dapat diedit agar hubungan bahan yang sudah tersimpan tetap aman. <button type="button" className="btn btn-secondary" onClick={() => refreshRecipes?.()}>Coba lagi</button></div>}
                     {/* Filters */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
                         <input
@@ -213,6 +312,7 @@ export default function ProductsPage() {
                         {filteredProducts.map(product => {
                             const modifiers = JSON.parse(product.modifiers || '[]');
                             const category = categories.find(c => c.id === product.category);
+                            const linkedSupplies = recipeFor(product.id);
                             const profit = product.sell_price - product.cost_price;
                             const margin = ((profit / product.sell_price) * 100).toFixed(0);
 
@@ -224,13 +324,13 @@ export default function ProductsPage() {
                                                 <h4 style={{ marginBottom: '4px' }}>{product.name}</h4>
                                                 <span className="badge badge-neutral">{category?.name || 'Unknown'}</span>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                            <div className={styles.cardActions}>
                                                 {user?.role === 'admin' && (
                                                     <>
-                                                        <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(product)}>
-                                                            ✏️
+                                                        <button className="btn btn-ghost btn-sm" aria-label={`Edit ${product.name}`} disabled={recipeLoading || Boolean(recipeError) || Boolean(productError)} onClick={() => openEditModal(product)}>
+                                                            ✏️ Edit
                                                         </button>
-                                                        <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(product)}>
+                                                        <button className="btn btn-ghost btn-sm" aria-label={`Hapus ${product.name}`} onClick={() => handleDelete(product)}>
                                                             🗑️
                                                         </button>
                                                     </>
@@ -259,6 +359,15 @@ export default function ProductsPage() {
                                                 <span className="text-xs">{modifiers.map(m => m.name).join(', ')}</span>
                                             </div>
                                         )}
+                                        <section className={styles.recipeCard} aria-label={`Bahan per porsi ${product.name}`}>
+                                            {recipeLoading ? <p>Memuat bahan per porsi…</p> : recipeError ? <p>Status bahan belum tersedia.</p> : linkedSupplies.length ? <>
+                                                <strong>Bahan per porsi</strong>
+                                                <ul>{linkedSupplies.map(link => {
+                                                    const supply = supplyCatalog.find(item => String(item.id) === String(link.supply_id));
+                                                    return <li key={link.supply_id}><span>{supply?.name || 'Bahan tersimpan'}</span><span>{formatDose(link.quantity_per_serving)} {unitLabel(supply?.unit || '')}{Number(link.quantity_tolerance) > 0 ? ` ±${formatDose(link.quantity_tolerance)}` : ''} / porsi</span></li>;
+                                                })}</ul>
+                                            </> : <div className={styles.unlinked}><strong>Belum terhubung — stok bahan tidak berkurang</strong><span>Atur takaran bahan agar penjualan menu ini mengurangi inventory.</span>{user?.role === 'admin' && <button type="button" className="btn btn-secondary btn-sm" aria-label={`Atur bahan ${product.name}`} disabled={recipeLoading || Boolean(recipeError) || Boolean(productError)} onClick={() => openEditModal(product)}>Atur bahan</button>}</div>}
+                                        </section>
                                     </div>
                                 </div>
                             );
@@ -276,22 +385,31 @@ export default function ProductsPage() {
 
             {/* Add/Edit Product Modal */}
             {showModal && (
-                <div className="modal-overlay" onClick={() => setShowModal(false)}>
-                    <div className="modal" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay" onClick={event => { if (event.target === event.currentTarget) closeModal(); }}>
+                    <div ref={dialogRef} className={`modal ${styles.productDialog}`} role="dialog" aria-modal="true" aria-labelledby="product-dialog-title" aria-busy={saving} onClick={e => e.stopPropagation()} onKeyDown={event => {
+                        if (event.key === 'Escape') { event.preventDefault(); if (!submitLock.current) closeModal(); }
+                        if (event.key !== 'Tab') return;
+                        const focusable = [...dialogRef.current.querySelectorAll('button, input, select, a[href]')].filter(element => !element.disabled);
+                        const first = focusable[0], last = focusable.at(-1);
+                        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+                    }}>
                         <div className="modal-header">
-                            <h3 className="modal-title">
+                            <h3 id="product-dialog-title" className="modal-title">
                                 {editingProduct ? 'Edit Produk' : 'Tambah Produk'}
                             </h3>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setShowModal(false)}>✕</button>
+                            <button type="button" className="btn btn-ghost btn-icon" aria-label="Tutup formulir produk" disabled={saving} onClick={closeModal}>✕</button>
                         </div>
 
                         <form onSubmit={handleSubmit}>
-                            <div className="modal-body">
+                            <fieldset disabled={saving} className={styles.formFieldset}>
+                            <div className={`modal-body ${styles.productBody}`}>
                                 <div style={{ marginBottom: 'var(--spacing-md)' }}>
-                                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
+                                    <label htmlFor="product-name" className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
                                         Nama Produk *
                                     </label>
                                     <input
+                                        id="product-name"
                                         type="text"
                                         className="input"
                                         value={formData.name}
@@ -301,10 +419,11 @@ export default function ProductsPage() {
                                 </div>
 
                                 <div style={{ marginBottom: 'var(--spacing-md)' }}>
-                                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
+                                    <label htmlFor="product-category" className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
                                         Kategori *
                                     </label>
                                     <select
+                                        id="product-category"
                                         className="input"
                                         value={formData.category}
                                         onChange={e => setFormData(prev => ({ ...prev, category: e.target.value }))}
@@ -316,12 +435,13 @@ export default function ProductsPage() {
                                     </select>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)' }}>
+                                <div className={styles.priceGrid}>
                                     <div>
-                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
+                                        <label htmlFor="product-sell-price" className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
                                             Harga Jual (Rp) *
                                         </label>
                                         <input
+                                            id="product-sell-price"
                                             type="text"
                                             className="input"
                                             value={formatNumberInput(formData.sell_price)}
@@ -330,10 +450,11 @@ export default function ProductsPage() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
+                                        <label htmlFor="product-cost-price" className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>
                                             HPP (Rp) *
                                         </label>
                                         <input
+                                            id="product-cost-price"
                                             type="text"
                                             className="input"
                                             value={formatNumberInput(formData.cost_price)}
@@ -368,15 +489,11 @@ export default function ProductsPage() {
                                     </div>
 
                                     {formData.modifiers.map((mod, idx) => (
-                                        <div key={idx} style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '2fr 1fr auto',
-                                            gap: '8px',
-                                            marginBottom: '8px'
-                                        }}>
+                                        <div key={idx} className={styles.modifierRow}>
                                             <input
                                                 type="text"
                                                 className="input"
+                                                aria-label={`Nama opsi ${idx + 1}`}
                                                 placeholder="Nama opsi"
                                                 value={mod.name}
                                                 onChange={e => updateModifier(idx, 'name', e.target.value)}
@@ -384,26 +501,62 @@ export default function ProductsPage() {
                                             <input
                                                 type="text"
                                                 className="input"
+                                                aria-label={`Harga opsi ${idx + 1}`}
                                                 placeholder="Harga"
                                                 value={formatNumberInput(mod.price)}
                                                 onChange={e => updateModifier(idx, 'price', parseNumberInput(e.target.value))}
                                             />
-                                            <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeModifier(idx)}>
+                                            <button type="button" className="btn btn-ghost btn-icon" aria-label={`Hapus opsi ${idx + 1}`} onClick={() => removeModifier(idx)}>
                                                 ✕
                                             </button>
                                         </div>
                                     ))}
                                 </div>
+
+                                <section className={styles.recipeEditor} aria-labelledby="product-recipe-title">
+                                    <div className={styles.recipeHeading}>
+                                        <div><h4 id="product-recipe-title">Bahan per porsi</h4><p>Pilih bahan yang benar-benar dipakai untuk satu porsi menu ini. Penjualan berikutnya akan mengurangi stok sesuai takaran yang disimpan.</p></div>
+                                        <button type="button" className="btn btn-secondary" onClick={addRecipeRow} disabled={recipeRows.length >= Math.min(100, supplyCatalog.length)}>+ Tambah bahan</button>
+                                    </div>
+                                    {supplyCatalog.length === 0 && <p className={styles.recipeHelp}>Belum ada bahan inventory. {saving ? 'Selesaikan penyimpanan dahulu.' : <Link href="/inventory">Tambah bahan di Inventory</Link>} lalu kembali ke produk ini.</p>}
+                                    {recipeRows.map((row, index) => {
+                                        const supply = supplyCatalog.find(item => String(item.id) === row.supply_id);
+                                        const usedByOthers = new Set(recipeRows.filter(other => other.rowId !== row.rowId).map(other => other.supply_id));
+                                        return <div key={row.rowId} className={styles.recipeRow}>
+                                            <label>Bahan {index + 1}
+                                                <select className="input" required value={row.supply_id} onChange={event => updateRecipeRow(row.rowId, 'supply_id', event.target.value)}>
+                                                    <option value="">Pilih bahan</option>
+                                                    {supplyCatalog.filter(item => String(item.id) === row.supply_id || !usedByOthers.has(String(item.id))).map(item => <option key={item.id} value={item.id}>{item.name} ({unitLabel(item.unit)})</option>)}
+                                                </select>
+                                            </label>
+                                            <label>Takaran bahan {index + 1} ({unitLabel(supply?.unit || 'satuan')} / porsi)
+                                                <input className="input" type="number" inputMode="decimal" min="0.000001" step="any" required value={row.quantity_per_serving} placeholder="Isi takaran" onChange={event => updateRecipeRow(row.rowId, 'quantity_per_serving', event.target.value)} />
+                                            </label>
+                                            <label>Variasi bahan {index + 1} (± {unitLabel(supply?.unit || 'satuan')})
+                                                <input className="input" type="number" inputMode="decimal" min="0" step="any" required value={row.quantity_tolerance} onChange={event => updateRecipeRow(row.rowId, 'quantity_tolerance', event.target.value)} />
+                                            </label>
+                                            <div className={styles.recipeRowActions}>
+                                                {supply?.unit === 'ml' && !row.quantity_per_serving && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRecipeRows(previous => previous.map(item => item.rowId === row.rowId ? { ...item, quantity_per_serving: '15', quantity_tolerance: '3' } : item))}>Isi 15 ml ±3 ml</button>}
+                                                <button type="button" className="btn btn-ghost btn-sm" aria-label={`Hapus bahan ${index + 1}`} onClick={() => removeRecipeRow(row.rowId)}>Hapus</button>
+                                            </div>
+                                        </div>;
+                                    })}
+                                    {recipeRows.length === 0 && <label className={styles.untrackedChoice}><input type="checkbox" checked={untrackedAcknowledged} onChange={event => setUntrackedAcknowledged(event.target.checked)} /> Produk ini tidak memakai bahan inventory</label>}
+                                    {recipeRows.length === 0 && !untrackedAcknowledged && <p className={styles.recipeHelp}>Pilih bahan, atau konfirmasi bahwa menu ini memang tidak menggunakan bahan yang dicatat di Inventory.</p>}
+                                    {recipeRows.length > 0 && <p className={styles.recipeHelp}>Takaran per porsi memakai satuan bahan. Ubah tiap menu sesuai resepnya; variasi boleh 0. Menyimpan resep tidak mengubah sisa stok yang sudah ada.</p>}
+                                </section>
+                                {saveError && <div className={styles.saveError} role="alert">{saveError}</div>}
                             </div>
 
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>
+                            <div className={`modal-footer ${styles.productFooter}`}>
+                                <button type="button" className="btn btn-ghost" onClick={closeModal}>
                                     Batal
                                 </button>
-                                <button type="submit" className="btn btn-primary">
-                                    {editingProduct ? 'Simpan Perubahan' : 'Tambah Produk'}
+                                <button type="submit" className="btn btn-primary" disabled={saving || recipeLoading || Boolean(recipeError) || Boolean(productError)}>
+                                    {saving ? 'Menyimpan…' : editingProduct ? 'Simpan Perubahan' : 'Tambah Produk'}
                                 </button>
                             </div>
+                            </fieldset>
                         </form>
                     </div>
                 </div>

@@ -11,7 +11,8 @@
     "test:inventory-ui": "node tests/inventoryBrowser.mjs",
     "test:pos-inventory-ui": "node tests/posInventoryBrowser.mjs",
     "test:transaction-reversal-ui": "node tests/transactionReversalBrowser.mjs",
-    "test:manual-transaction-ui": "node tests/manualTransactionBrowser.mjs"
+    "test:manual-transaction-ui": "node tests/manualTransactionBrowser.mjs",
+    "test:product-supply-ui": "node tests/productSupplyBrowser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

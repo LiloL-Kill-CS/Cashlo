@@ -35,7 +35,8 @@ export async function createStockTestDatabase(dataDir, { existing = false } = {}
             owner_id text,
             category text, sell_price numeric default 0, cost_price numeric default 0,
             modifiers text,
-            is_active boolean default true
+            is_active boolean default true,
+            created_at timestamptz default now(), updated_at timestamptz default now()
         );
         create table public.transactions (
             id text primary key, datetime timestamptz default now(), user_id text,
@@ -72,5 +73,6 @@ export async function createStockTestDatabase(dataDir, { existing = false } = {}
     await db.exec(await readFile(new URL('../docs/sql/inventory-pos-consumption.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../docs/sql/inventory-pos-reversals.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/20261006133343_manual_transaction_supply_consumption.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20261101133409_save_product_with_supplies.sql', import.meta.url), 'utf8'));
     return db;
 }

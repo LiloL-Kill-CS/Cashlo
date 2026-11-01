@@ -1,0 +1,255 @@
+.recipeLoadError,
+.saveError {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 18px;
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  background: var(--color-error-bg);
+  overflow-wrap: anywhere;
+}
+
+.cardActions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cardActions button,
+.productDialog :global(.modal-header) button,
+.modifierRow button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.recipeCard {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.recipeCard strong {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.recipeCard ul {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.recipeCard li {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.recipeCard li span:last-child {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.unlinked {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.unlinked strong {
+  color: var(--color-warning);
+  margin: 0;
+}
+
+.unlinked button {
+  justify-self: start;
+  min-height: 44px;
+}
+
+.productDialog {
+  width: min(96vw, 720px);
+  max-width: 720px;
+  max-height: min(92dvh, 880px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.productDialog form,
+.formFieldset {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.formFieldset {
+  border: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.productBody {
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.priceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.modifierRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.modifierRow input,
+.modifierRow button {
+  min-width: 0;
+}
+
+.recipeEditor {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-tertiary);
+}
+
+.recipeHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.recipeHeading h4 {
+  font-size: var(--font-size-lg);
+  margin-bottom: 4px;
+}
+
+.recipeHeading p,
+.recipeHelp {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.recipeHeading p {
+  max-width: 48ch;
+}
+
+.recipeHeading button,
+.recipeRowActions button,
+.productFooter button {
+  min-height: 44px;
+}
+
+.recipeRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.recipeRow label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.recipeRow select,
+.recipeRow input {
+  min-width: 0;
+}
+
+.recipeRowActions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.untrackedChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.untrackedChoice input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.recipeHelp a {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+.saveError {
+  margin: 16px 0 0;
+}
+
+.productFooter {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .recipeRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modifierRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .recipeEditor {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 390px) {
+  .modifierRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .modifierRow input:nth-child(2) {
+    grid-column: 1;
+  }
+
+  .modifierRow button {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+}

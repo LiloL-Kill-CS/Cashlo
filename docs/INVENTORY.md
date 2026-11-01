@@ -21,6 +21,24 @@ variation to 2 ml for a 13-17 ml range, or customize either value per menu.
 all selected menus in one action. Save once to persist the item and all links
 atomically. Linking or changing doses does not change the existing stock.
 
+Products also exposes **Bahan per porsi** when adding or editing a menu. Choose
+one or more saved inventory items and their doses; the menu and its ingredient
+links save atomically. This works for existing and new product IDs, shared syrups,
+and custom doses. Existing links and doses preload when editing. A saved package
+yield supplies a dose suggestion; a blank ml dose has an explicit 15 ml action.
+An item without a saved dose requires a choice, rather than a guessed recipe.
+Failed saves retain the form. If a save commits but the product list cannot
+refresh, the page says the data is already saved and offers a read-only reload;
+further edits stay disabled until the list is current.
+
+Each product shows its saved ingredients, or a clear **Belum terhubung** status
+and an **Atur bahan** action. Saving a product without ingredients requires
+explicit confirmation that it uses no tracked inventory. Inventory counts only
+items actually linked to menus as automatic tracking, and marks unlinked items.
+Merely adding a supply or recording its bottle yield does not link it to a menu.
+HPP recipes remain independent cost calculations. Configuring ingredients affects
+future entries only; it does not replay earlier sales or change current balances.
+
 **Catat pakai** records usage outside POS sales, such as samples or waste. It lets
 you choose a linked menu and its portion count. Menu doses
 debit the same supply balance. Usage history snapshots the menu name, dose, and
@@ -117,7 +135,13 @@ Supply balances are business-wide; sellable-product stock remains per warehouse.
    completed `inventory_source=manual` receipts and typed ledger keys. It keeps
    existing account records, recipes, receipts, and stock untouched. Manual entry
    requires an active signed business admin; POS keeps its cashier permissions.
-8. Deploy the app using its normal release process.
+8. Apply `supabase/migrations/20261101133409_save_product_with_supplies.sql` before
+   releasing product recipe editing. It adds an active-admin, owner-checked RPC
+   which saves a product and only that product's ingredient links atomically.
+   A null recipe preserves links; an empty array explicitly unlinks them. A
+   recipe-only `{id}` edit preserves all existing product metadata and timestamps.
+   Existing stock, audit history, and other menus' recipes stay untouched.
+9. Deploy the app using its normal release process.
 
 The migrations were applied to the live database on October 1, 2026 as
 `20261001133634_reusable_cafe_inventory_stock` and
@@ -155,6 +179,13 @@ menus, shortage rollback, POS regression, and concurrent cancel/cancel/delete.
 The protected account snapshot still matches across 23 tables. The production
 build and 39 isolated browser checks passed, including phone/tablet/laptop flows.
 
+The product recipe fix uses live migration
+`20261101134120_save_product_with_supplies` (November 1, 2026). Its rollback suite
+passed in isolated and live PostgreSQL. All 15 database/quantity checks and 78
+isolated browser checks passed. Live synthetic REST checks verify new Butter
+recipes, existing custom 20 ml recipes, shared ingredients, POS and historical
+deductions, shortages, metadata-only changes, and exact ingredient refunds.
+
 The stock and menu RPCs intentionally use `SECURITY DEFINER` for atomic balance and
 ledger writes. They pin the search path, check signed admin/owner claims, reject
 foreign-owner items, and deny anonymous execution. Supabase's advisor flags this
@@ -179,6 +210,7 @@ npm run test:inventory-ui
 npm run test:pos-inventory-ui
 npm run test:transaction-reversal-ui
 npm run test:manual-transaction-ui
+npm run test:product-supply-ui
 npm run build -- --webpack
 ```
 
@@ -212,3 +244,10 @@ Optional environment variables: `INVENTORY_TEST_URL` overrides localhost:3100;
 `PLAYWRIGHT_CHANNEL=chrome` uses installed Chrome; `PLAYWRIGHT_MODULE` points to
 an existing Playwright package. In a worktree using a dependency junction outside
 the project root, `--webpack` avoids Turbopack's external-symlink limitation.
+
+The product recipe regression suite starts by creating a product through the
+real Products form, then pays through POS and records Input Data Lama. It covers
+existing unlinked menus, shared and multiple ingredients, saved custom 20 ml
+doses, package-yield suggestions, failed atomic saves, reload persistence, and
+390/820/1366 px layouts. The database suite checks atomicity, role/owner isolation,
+legacy metadata preservation, and exact refunds after later recipe changes.

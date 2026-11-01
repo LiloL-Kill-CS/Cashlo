@@ -1,25 +1,51 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export function useProducts(userId, userRole) {
+export function useProducts(userId, userRole, { includeSupplies = false } = {}) {
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [supplyCatalog, setSupplyCatalog] = useState([]);
+    const [supplyLinks, setSupplyLinks] = useState([]);
+    const [recipeLoading, setRecipeLoading] = useState(includeSupplies);
+    const [recipeError, setRecipeError] = useState('');
+    const [productError, setProductError] = useState('');
 
     useEffect(() => {
         if (userId) {
             loadData();
         }
-    }, [userId]);
+    }, [userId, includeSupplies]);
+
+    async function refreshRecipes() {
+        if (!includeSupplies || !userId) return;
+        setRecipeLoading(true);
+        setRecipeError('');
+        try {
+            const [catalog, links] = await Promise.all([
+                supabase.from('supplies').select('id,name,unit,pack_size,servings_per_pack').eq('owner_id', userId).order('name'),
+                supabase.from('supply_menu_links').select('*').eq('owner_id', userId),
+            ]);
+            if (catalog.error) throw catalog.error;
+            if (links.error) throw links.error;
+            setSupplyCatalog(catalog.data || []);
+            setSupplyLinks(links.data || []);
+        } catch (error) {
+            setRecipeError(error.message || 'Bahan dan takaran gagal dimuat. Coba muat ulang sebelum menyimpan.');
+        } finally {
+            setRecipeLoading(false);
+        }
+    }
 
     async function loadData() {
+        const recipesReady = refreshRecipes();
+        setProductError('');
         try {
             // Always filter by owner - each user sees only their own data
             const prodQuery = supabase.from('products').select('*').eq('is_active', true).eq('owner_id', userId);
             const catQuery = supabase.from('categories').select('*').eq('owner_id', userId).order('order', { ascending: true });
 
-            const { data: allProds, error: prodError } = await prodQuery;
-            const { data: cats, error: catError } = await catQuery;
+            const [{ data: allProds, error: prodError }, { data: cats, error: catError }] = await Promise.all([prodQuery, catQuery]);
 
             if (prodError) throw prodError;
             if (catError) throw catError;
@@ -31,48 +57,37 @@ export function useProducts(userId, userRole) {
 
             setProducts(prods);
             setCategories(cats);
+            return true;
         } catch (error) {
             console.error('Error loading products:', error);
+            setProductError('Daftar produk gagal dimuat. Muat ulang sebelum menambah atau mengubah produk.');
+            return false;
         } finally {
+            await recipesReady;
             setLoading(false);
         }
     }
 
-    async function addProduct(product) {
-        if (userRole === 'kasir') throw new Error('Kasir tidak diizinkan menambah produk');
-        const id = `prod-${Date.now()}`;
-        const newProduct = {
-            ...product,
-            id,
-            owner_id: userId, // Set owner to current user
-            modifiers: JSON.stringify(product.modifiers || []),
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        };
-
-        const { error } = await supabase.from('products').insert([newProduct]);
-        if (error) console.error('Error adding product:', error);
-
-        await loadData();
+    async function addProduct(product, supplies = []) {
+        if (userRole !== 'admin') throw new Error('Hanya admin yang dapat menambah produk');
+        const id = product.id || `prod-${crypto.randomUUID()}`;
+        const { error } = await supabase.rpc('save_product_with_supplies', {
+            p_data: { ...product, id },
+            p_supplies: supplies,
+        });
+        if (error) throw error;
+        if (!await loadData()) setProductError('Produk dan bahan sudah tersimpan. Daftar produk gagal dimuat; muat ulang daftar tanpa menambahkan produk yang sama lagi.');
         return id;
     }
 
-    async function updateProduct(id, updates) {
-        if (userRole === 'kasir') throw new Error('Kasir tidak diizinkan mengubah produk');
-        const updateData = {
-            ...updates,
-            updated_at: new Date().toISOString()
-        };
-
-        if (updates.modifiers) {
-            updateData.modifiers = JSON.stringify(updates.modifiers);
-        }
-
-        const { error } = await supabase.from('products').update(updateData).eq('id', id).eq('owner_id', userId);
-        if (error) console.error('Error updating product:', error);
-
-        await loadData();
+    async function updateProduct(id, updates, supplies = null) {
+        if (userRole !== 'admin') throw new Error('Hanya admin yang dapat mengubah produk');
+        const { error } = await supabase.rpc('save_product_with_supplies', {
+            p_data: { ...updates, id },
+            p_supplies: supplies,
+        });
+        if (error) throw error;
+        if (!await loadData()) setProductError('Produk dan bahan sudah tersimpan. Daftar produk gagal dimuat; muat ulang daftar tanpa menyimpan ulang.');
     }
 
     async function deleteProduct(id) {
@@ -128,6 +143,12 @@ export function useProducts(userId, userRole) {
         products,
         categories,
         loading,
+        supplyCatalog,
+        supplyLinks,
+        recipeLoading,
+        recipeError,
+        productError,
+        refreshRecipes,
         addProduct,
         updateProduct,
         deleteProduct,
