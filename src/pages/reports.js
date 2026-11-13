@@ -43,9 +43,10 @@ export default function ReportsPage() {
     const [showManualModal, setShowManualModal] = useState(false);
     const [showExpenseModal, setShowExpenseModal] = useState(false);
     const [newExpense, setNewExpense] = useState({ date: new Date().toISOString().split('T')[0], category: 'Gaji Karyawan', amount: '', notes: '' });
-    const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [] });
+    const [manualData, setManualData] = useState({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [], deductStock: true });
     const [manualBusy, setManualBusy] = useState(false);
     const [manualError, setManualError] = useState('');
+    const [manualStockShortage, setManualStockShortage] = useState(false);
     const [manualLinks, setManualLinks] = useState([]);
     const [manualLinksLoading, setManualLinksLoading] = useState(false);
     const [manualLinksError, setManualLinksError] = useState(false);
@@ -61,6 +62,7 @@ export default function ReportsPage() {
     useEffect(() => {
         // A changed form is a new receipt. An unchanged retry keeps the same ID.
         if (manualCheckout.current?.signature !== manualSignature) manualCheckout.current = null;
+        setManualStockShortage(false);
     }, [manualSignature]);
 
     useEffect(() => {
@@ -263,9 +265,10 @@ export default function ReportsPage() {
         });
     };
 
-    const handleManualSubmit = async (e) => {
-        e.preventDefault();
+    const handleManualSubmit = async (e, options = {}) => {
+        e?.preventDefault?.();
         if (manualSubmitLock.current) return;
+        const deductStock = options.deductStock ?? manualData.deductStock !== false;
         if (!manualData.datetime) {
             setManualError('Mohon pilih tanggal dan waktu.');
             return;
@@ -298,7 +301,7 @@ export default function ReportsPage() {
             }));
 
             const totalQty = manualData.cartItems.reduce((sum, item) => sum + Number(item.qty), 0);
-            const signature = JSON.stringify(manualData);
+            const signature = JSON.stringify({ ...manualData, deductStock });
             if (!manualCheckout.current || manualCheckout.current.signature !== signature) {
                 manualCheckout.current = {
                     signature,
@@ -313,15 +316,23 @@ export default function ReportsPage() {
                 count: totalQty,
                 notes: manualData.notes,
                 payment_method: manualData.paymentMethod,
+                deduct_stock: deductStock,
                 items
             }, manualCheckout.current.id);
 
             manualCheckout.current = null;
             setShowManualModal(false);
-            setManualData({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [] });
-            setTransactionFeedback({ type: 'success', message: 'Data lama tersimpan. Stok bahan saat ini sudah diperbarui sesuai takaran menu dan jumlah kemasan. Pastikan filter tanggal mencakup tanggal transaksi.' });
-            alert('Data lama tersimpan dan stok bahan saat ini sudah diperbarui. Pastikan filter laporan mencakup tanggal transaksi.');
+            setManualData({ datetime: '', notes: '', paymentMethod: 'qr', cartItems: [], deductStock: true });
+            if (deductStock) {
+                setTransactionFeedback({ type: 'success', message: 'Data lama tersimpan. Stok bahan saat ini sudah diperbarui sesuai takaran menu dan jumlah kemasan. Pastikan filter tanggal mencakup tanggal transaksi.' });
+                alert('Data lama tersimpan dan stok bahan saat ini sudah diperbarui. Pastikan filter laporan mencakup tanggal transaksi.');
+            } else {
+                setTransactionFeedback({ type: 'success', message: 'Data lama tersimpan tanpa mengurangi stok bahan. Penjualan tetap masuk laporan. Pastikan filter tanggal mencakup tanggal transaksi.' });
+                alert('Data lama tersimpan tanpa mengurangi stok bahan. Pastikan filter laporan mencakup tanggal transaksi.');
+            }
+            setManualStockShortage(false);
         } catch (error) {
+            setManualStockShortage(deductStock && (error?.code === '23514' || /tidak cukup/i.test(error?.message || '')));
             setManualError(error?.message || 'Gagal menyimpan transaksi lama. Coba lagi tanpa mengubah data agar transaksi tidak tercatat dua kali.');
         } finally {
             manualSubmitLock.current = false;
@@ -931,6 +942,25 @@ export default function ReportsPage() {
                                 )}
 
                                 {manualData.cartItems.length > 0 && (
+                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '12px', padding: '12px', border: '1px solid var(--color-border)', borderRadius: '8px', cursor: 'pointer', overflowWrap: 'anywhere' }}>
+                                        <input
+                                            type="checkbox"
+                                            style={{ width: '20px', height: '20px', marginTop: '2px', flexShrink: 0 }}
+                                            checked={manualData.deductStock !== false}
+                                            onChange={e => setManualData({ ...manualData, deductStock: e.target.checked })}
+                                        />
+                                        <span>
+                                            <strong>Kurangi stok bahan saat ini</strong>
+                                            <span className="text-sm text-secondary" style={{ display: 'block', marginTop: '2px' }}>
+                                                {manualData.deductStock !== false
+                                                    ? 'Stok bahan terhubung dipotong sesuai takaran. Matikan untuk penjualan lama yang terjadi sebelum stok dicatat, atau jika stok bahan kosong (0).'
+                                                    : 'Stok tidak berubah. Penjualan, omzet, dan profit tetap masuk laporan. Cocok untuk data lama sebelum stok dicatat.'}
+                                            </span>
+                                        </span>
+                                    </label>
+                                )}
+
+                                {manualData.cartItems.length > 0 && manualData.deductStock !== false && (
                                     <section role="region" aria-label="Perkiraan pemakaian bahan" style={{ marginBottom: '16px', padding: '12px', border: '1px solid var(--color-border)', borderRadius: '8px', background: 'var(--color-bg-secondary)', overflowWrap: 'anywhere' }}>
                                         <div style={{ fontWeight: 600, marginBottom: '4px' }}>Perkiraan pemakaian bahan</div>
                                         <p className="text-sm text-secondary" style={{ margin: '0 0 8px' }}>Takaran menu adalah jumlah nominal tersimpan. Jumlah bahan langsung dihitung dalam kemasan. Stok terakhir dimuat saat membuka formulir; stok aktual diperiksa lagi saat menyimpan.</p>
@@ -948,7 +978,7 @@ export default function ReportsPage() {
                                             return <div key={supplyId} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '4px 12px', padding: '5px 0' }}>
                                                 <span>{supply?.name || 'Bahan'}: <strong>{formatSupplyAmount(roundedAmount)} {supply?.unit || ''}</strong></span>
                                                 {supply && <span className="text-sm text-secondary">Stok terakhir: {formatSupplyAmount(available)} {supply.unit}</span>}
-                                                {shortStock && <span role="alert" style={{ flexBasis: '100%', color: 'var(--color-error)' }}>Stok {supply.name} tidak cukup untuk jumlah ini. Kurangi jumlah atau tambah stok sebelum menyimpan.</span>}
+                                                {shortStock && <span role="alert" style={{ flexBasis: '100%', color: 'var(--color-error)' }}>Stok {supply.name} tidak cukup untuk jumlah ini. Tambah stok, atau matikan &ldquo;Kurangi stok bahan saat ini&rdquo; untuk menyimpan data lama tanpa memotong stok.</span>}
                                             </div>;
                                         })}
                                     </section>
@@ -969,7 +999,23 @@ export default function ReportsPage() {
                                         <span style={{ color: 'var(--color-success)', fontWeight: '700' }}>+{formatCurrency(manualCartTotals.totalProfit)}</span>
                                     </div>
                                 </div>
-                                {manualError && <div role="alert" style={{ marginTop: '12px', padding: '10px', borderRadius: '6px', background: 'var(--color-error-bg)', color: 'var(--color-error)', overflowWrap: 'anywhere' }}>{manualError}</div>}
+                                {manualError && <div role="alert" style={{ marginTop: '12px', padding: '10px', borderRadius: '6px', background: 'var(--color-error-bg)', color: 'var(--color-error)', overflowWrap: 'anywhere' }}>
+                                    {manualError}
+                                    {manualStockShortage && (
+                                        <div style={{ marginTop: '10px' }}>
+                                            <div style={{ marginBottom: '8px', color: 'var(--color-text-primary)' }}>Ini data lama? Simpan penjualannya tanpa mengurangi stok bahan.</div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-primary"
+                                                style={{ minHeight: '44px' }}
+                                                onClick={() => {
+                                                    setManualData(prev => ({ ...prev, deductStock: false }));
+                                                    handleManualSubmit(null, { deductStock: false });
+                                                }}
+                                            >Simpan tanpa mengurangi stok</button>
+                                        </div>
+                                    )}
+                                </div>}
                             </div>
                             <div className="modal-footer" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                 <button type="button" className="btn btn-ghost" style={{ minHeight: '44px' }} onClick={() => setShowManualModal(false)}>Batal</button>

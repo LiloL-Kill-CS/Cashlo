@@ -80,6 +80,14 @@ unchanged. An unchanged retry retains its receipt ID to avoid double deduction.
 Canceling or deleting these new manual receipts returns the recorded menu doses
 and direct package amounts exactly once, even after later recipe/package edits.
 
+**Old sales without stock (0 ml).** Sales that happened before stock was tracked,
+or while a supply shows 0, can still be entered. Uncheck **Kurangi stok bahan saat
+ini** in Input Data Lama, or, after a shortage error, press **Simpan tanpa mengurangi
+stok**. The receipt saves with `inventory_source=manual_no_stock`: revenue, HPP,
+and profit appear in Reports, but no supply balance or ingredient history changes.
+Canceling or deleting such a receipt returns nothing, because nothing was taken.
+No database migration is needed; the existing triggers ignore this source.
+
 A backdated receipt subtracts from today's recorded stock when entered. It does
 not reconstruct historical balances. Existing unmarked historic receipts stay
 unchanged, and customer points and warehouse product stock are not modified by

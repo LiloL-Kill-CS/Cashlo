@@ -238,7 +238,36 @@ try {
     assert.equal(await transactionCount(), beforeFailed);
     assert.equal(await balance(supplies.syrup), 10);
     check('shortage error keeps the form and prevents receipt and ledger writes');
-    await dialog().getByRole('button', { name: 'Tutup input data lama' }).click();
+
+    // Old sales may predate stock tracking: the shortage offers saving the
+    // receipt without touching ingredients, even at 0 ml.
+    await adjust(supplies.syrup, 0);
+    await dialog().getByRole('button', { name: 'Simpan Data Lama' }).click();
+    await dialog().getByRole('button', { name: 'Simpan tanpa mengurangi stok' }).click();
+    await dialog().waitFor({ state: 'hidden' });
+    const noStockFromError = await recent();
+    assert.equal(noStockFromError.inventory_source, 'manual_no_stock');
+    assert.equal(noStockFromError.status, 'completed');
+    assert.equal(await transactionCount(), beforeFailed + 1);
+    assert.equal(await balance(supplies.syrup), 0);
+    assert.equal((await logs(noStockFromError.id)).length, 0);
+    await row(noStockFromError.id).waitFor();
+    check('shortage error offers saving the old sale without deducting 0 ml stock');
+
+    await openForm();
+    await addMenu('Kopder', 30);
+    await dialog().getByRole('checkbox', { name: /Kurangi stok bahan saat ini/ }).uncheck();
+    const noStockToggle = await save();
+    assert.equal(noStockToggle.inventory_source, 'manual_no_stock');
+    assert.equal(await balance(supplies.syrup), 0);
+    assert.equal((await logs(noStockToggle.id)).length, 0);
+    await row(noStockToggle.id).waitFor();
+    await action(noStockToggle.id, 'Batalkan');
+    await row(noStockToggle.id).getByText('Dibatalkan').waitFor();
+    await action(noStockFromError.id, 'Hapus');
+    await row(noStockFromError.id).waitFor({ state: 'hidden' });
+    assert.equal(await balance(supplies.syrup), 0);
+    check('unchecked stock option saves, cancels, and deletes old sales without stock changes');
     await adjust(supplies.syrup, 750);
 
     await openForm();

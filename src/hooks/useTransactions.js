@@ -176,7 +176,7 @@ export function useTransactions(userId, userRole, actualUserId) {
         const id = checkoutId || `${generateTransactionId()}-${crypto.randomUUID()}`;
         const { datetime, count, total_sell, total_cost, notes, items: providedItems } = data;
         if (!Array.isArray(providedItems) || !providedItems.length) {
-            throw new Error('Pilih menu atau bahan beserta jumlahnya agar stok dapat dihitung.');
+            throw new Error('Pilih menu atau bahan beserta jumlahnya.');
         }
         const items = providedItems.map((item, index) => ({
             ...item,
@@ -199,7 +199,10 @@ export function useTransactions(userId, userRole, actualUserId) {
             cash_received: total_sell,
             change: 0,
             status: 'completed',
-            inventory_source: 'manual',
+            // 'manual' lets the database deduct linked ingredients. Old sales
+            // recorded before stock tracking use 'manual_no_stock', which no
+            // trigger consumes, so the receipt saves even when stock is 0.
+            inventory_source: data.deduct_stock === false ? 'manual_no_stock' : 'manual',
             manual_txn_count: count || 1, // Store the bulk count
             created_at: now
         };
@@ -210,7 +213,7 @@ export function useTransactions(userId, userRole, actualUserId) {
             // ingredient deductions, rather than record the input a second time.
             const { data: existing } = await supabase.from('transactions').select('*')
                 .eq('id', id).eq('owner_id', userId).eq('user_id', currentUserId).maybeSingle();
-            if (existing && existing.status === 'completed' && existing.inventory_source === 'manual'
+            if (existing && existing.status === 'completed' && existing.inventory_source === transaction.inventory_source
                 && existing.items === transaction.items
                 && new Date(existing.datetime).getTime() === new Date(transaction.datetime).getTime()) {
                 await loadTransactions();
