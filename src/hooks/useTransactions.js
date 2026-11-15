@@ -199,10 +199,11 @@ export function useTransactions(userId, userRole, actualUserId) {
             cash_received: total_sell,
             change: 0,
             status: 'completed',
-            // 'manual' lets the database deduct linked ingredients. Old sales
-            // recorded before stock tracking use 'manual_no_stock', which no
-            // trigger consumes, so the receipt saves even when stock is 0.
-            inventory_source: data.deduct_stock === false ? 'manual_no_stock' : 'manual',
+            // 'manual' lets the database deduct linked ingredients per line.
+            // A receipt whose every line is sale-only uses 'manual_no_stock',
+            // which no trigger consumes, so it saves even when stock is 0.
+            // Lines flagged skip_stock are skipped by the database trigger.
+            inventory_source: items.every(item => item.skip_stock) ? 'manual_no_stock' : 'manual',
             manual_txn_count: count || 1, // Store the bulk count
             created_at: now
         };

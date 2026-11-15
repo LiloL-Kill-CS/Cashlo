@@ -80,13 +80,18 @@ unchanged. An unchanged retry retains its receipt ID to avoid double deduction.
 Canceling or deleting these new manual receipts returns the recorded menu doses
 and direct package amounts exactly once, even after later recipe/package edits.
 
-**Old sales without stock (0 ml).** Sales that happened before stock was tracked,
-or while a supply shows 0, can still be entered. Uncheck **Kurangi stok bahan saat
-ini** in Input Data Lama, or, after a shortage error, press **Simpan tanpa mengurangi
-stok**. The receipt saves with `inventory_source=manual_no_stock`: revenue, HPP,
-and profit appear in Reports, but no supply balance or ingredient history changes.
-Canceling or deleting such a receipt returns nothing, because nothing was taken.
-No database migration is needed; the existing triggers ignore this source.
+**Per-menu stock choice.** In Input Data Lama, every menu with linked
+ingredients has its own **Potong stok** checkbox (on by default). Untick it for
+menus that should record the sale only, e.g. old sales made before stock was
+tracked, or a supply currently at 0 ml. Five menus can be entered in one receipt
+with three consuming stock and two not. **Semua pakai stok** / **Semua tanpa stok**
+flip every menu at once. After a shortage error, **Simpan semua tanpa mengurangi
+stok** saves the whole receipt as sale-only. Sale-only lines carry
+`"skip_stock": true` in the receipt items; a receipt where every line is
+sale-only uses `inventory_source=manual_no_stock`. Revenue, HPP, and profit still
+count in Reports. Canceling or deleting returns only what was actually used.
+Requires migration `20261115090000_manual_entry_per_menu_stock_choice.sql`
+(applied live on November 15, 2026).
 
 A backdated receipt subtracts from today's recorded stock when entered. It does
 not reconstruct historical balances. Existing unmarked historic receipts stay
@@ -149,7 +154,10 @@ Supply balances are business-wide; sellable-product stock remains per warehouse.
    A null recipe preserves links; an empty array explicitly unlinks them. A
    recipe-only `{id}` edit preserves all existing product metadata and timestamps.
    Existing stock, audit history, and other menus' recipes stay untouched.
-9. Deploy the app using its normal release process.
+9. Apply `supabase/migrations/20261115090000_manual_entry_per_menu_stock_choice.sql`
+   before releasing per-menu stock choice. It only adds the `skip_stock` line
+   flag to the manual-entry trigger; receipts without it behave as before.
+10. Deploy the app using its normal release process.
 
 The migrations were applied to the live database on October 1, 2026 as
 `20261001133634_reusable_cafe_inventory_stock` and

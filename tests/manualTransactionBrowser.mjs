@@ -243,7 +243,7 @@ try {
     // receipt without touching ingredients, even at 0 ml.
     await adjust(supplies.syrup, 0);
     await dialog().getByRole('button', { name: 'Simpan Data Lama' }).click();
-    await dialog().getByRole('button', { name: 'Simpan tanpa mengurangi stok' }).click();
+    await dialog().getByRole('button', { name: 'Simpan semua tanpa mengurangi stok' }).click();
     await dialog().waitFor({ state: 'hidden' });
     const noStockFromError = await recent();
     assert.equal(noStockFromError.inventory_source, 'manual_no_stock');
@@ -256,7 +256,7 @@ try {
 
     await openForm();
     await addMenu('Kopder', 30);
-    await dialog().getByRole('checkbox', { name: /Kurangi stok bahan saat ini/ }).uncheck();
+    await dialog().getByRole('checkbox', { name: 'Potong stok Kopder' }).uncheck();
     const noStockToggle = await save();
     assert.equal(noStockToggle.inventory_source, 'manual_no_stock');
     assert.equal(await balance(supplies.syrup), 0);
@@ -269,6 +269,42 @@ try {
     assert.equal(await balance(supplies.syrup), 0);
     check('unchecked stock option saves, cancels, and deletes old sales without stock changes');
     await adjust(supplies.syrup, 750);
+
+    // One receipt, per-menu choice: Kopder records the sale only, while
+    // Caramel Coffee still consumes its 20 ml syrup dose.
+    const sugarBeforeMixed = await balance(supplies.sugar);
+    await openForm();
+    await addMenu('Kopder', 2);
+    await addMenu('Caramel Coffee', 3);
+    await dialog().getByRole('checkbox', { name: 'Potong stok Kopder' }).uncheck();
+    assert.equal(await dialog().getByRole('checkbox', { name: 'Potong stok Caramel Coffee' }).isChecked(), true);
+    const perMenu = await save();
+    assert.equal(perMenu.inventory_source, 'manual');
+    assert.equal(Number(perMenu.subtotal), 2 * 18000 + 3 * 20000);
+    assert.equal(await balance(supplies.syrup), 690);
+    assert.equal(await balance(supplies.sugar), sugarBeforeMixed);
+    const perMenuLogs = await logs(perMenu.id);
+    assert.equal(perMenuLogs.length, 1);
+    assert.equal(perMenuLogs[0].product_id, 'test-caramel');
+    await row(perMenu.id).waitFor();
+    await action(perMenu.id, 'Batalkan');
+    await row(perMenu.id).getByText('Dibatalkan').waitFor();
+    assert.equal(await balance(supplies.syrup), 750);
+    assert.equal(await balance(supplies.sugar), sugarBeforeMixed);
+    check('one receipt mixes sale-only and stock-using menus; cancel returns only what was used');
+
+    // Shortcut buttons flip every menu at once.
+    await openForm();
+    await addMenu('Kopder');
+    await addMenu('Caramel Coffee');
+    await dialog().getByRole('button', { name: 'Semua tanpa stok' }).click();
+    assert.equal(await dialog().getByRole('checkbox', { name: 'Potong stok Kopder' }).isChecked(), false);
+    assert.equal(await dialog().getByRole('checkbox', { name: 'Potong stok Caramel Coffee' }).isChecked(), false);
+    await dialog().getByRole('button', { name: 'Semua pakai stok' }).click();
+    assert.equal(await dialog().getByRole('checkbox', { name: 'Potong stok Kopder' }).isChecked(), true);
+    await dialog().getByRole('button', { name: 'Tutup input data lama' }).click();
+    await dialog().waitFor({ state: 'hidden' });
+    check('all-on / all-off shortcuts toggle every menu');
 
     await openForm();
     await addMenu('Kopder');
